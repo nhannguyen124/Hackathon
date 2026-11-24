@@ -1,6 +1,9 @@
 /* =============================================================
-   LÁ CHẮN SỐ – Clickable Prototype
-   Toàn bộ dữ liệu là giả lập (mock), không gọi API thật.
+   LÁ CHẮN SỐ – Clickable Prototype (v1.1)
+   - Nội dung kiểm tra văn bản, bài học, quiz, dashboard: dữ liệu giả lập.
+   - Quét tệp (VirusTotal) và lưu báo cáo: gọi máy chủ thật trong server.js
+     khi trang được mở qua `npm start`. Khi mở trực tiếp file index.html,
+     ứng dụng tự chuyển sang chế độ demo và ghi rõ trên giao diện.
    ============================================================= */
 (() => {
   'use strict';
@@ -12,6 +15,65 @@
   const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const truncate = (s, n) => (s.length > n ? s.slice(0, n - 1).trimEnd() + '…' : s);
   const isMobile = () => window.matchMedia('(max-width: 860px)').matches;
+  const delay = (ms) => new Promise((r) => setTimeout(r, ms));
+  const uid = () => (crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(36) + Math.random().toString(36).slice(2));
+
+  const store = {
+    get(key, fallback) {
+      try { const v = localStorage.getItem(key); return v ? JSON.parse(v) : fallback; } catch { return fallback; }
+    },
+    set(key, value) {
+      try { localStorage.setItem(key, JSON.stringify(value)); } catch { /* bộ nhớ bị chặn: bỏ qua */ }
+    }
+  };
+
+  function formatSize(bytes) {
+    if (bytes < 1024) return `${bytes} B`;
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1).replace('.', ',')} KB`;
+    return `${(bytes / 1024 / 1024).toFixed(1).replace('.', ',')} MB`;
+  }
+
+  /* Số điện thoại Việt Nam */
+  const normalizePhone = (raw) => raw.replace(/[\s.\-()]/g, '').replace(/^\+?84/, '0');
+  const isValidPhone = (p) => /^0(3|5|7|8|9)\d{8}$/.test(p) || /^02\d{9}$/.test(p);
+  const formatPhone = (p) => (p.length === 10 ? `${p.slice(0, 4)} ${p.slice(4, 7)} ${p.slice(7)}` : `${p.slice(0, 4)} ${p.slice(4, 7)} ${p.slice(7)}`);
+  const maskPhone = (p) => `${p.slice(0, 4)} •••${p.slice(-3)}`;
+  function initials(name) {
+    const words = name.trim().split(/\s+/).filter(Boolean);
+    if (!words.length) return '?';
+    if (words.length === 1) return words[0].slice(0, 2).toUpperCase();
+    return (words[words.length - 2][0] + words[words.length - 1][0]).toUpperCase();
+  }
+
+  async function fetchJSON(url, opts = {}, timeout = 10000) {
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), timeout);
+    try {
+      const init = { ...opts, signal: ctrl.signal };
+      if (opts.json !== undefined) {
+        init.body = JSON.stringify(opts.json);
+        init.headers = { 'Content-Type': 'application/json', ...(opts.headers || {}) };
+        delete init.json;
+      }
+      const res = await fetch(url, init);
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        const err = new Error(data.error || `Máy chủ trả lỗi ${res.status}`);
+        err.status = res.status;
+        err.data = data;
+        throw err;
+      }
+      return data;
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+
+  async function sha256Hex(file) {
+    if (!(window.crypto && crypto.subtle)) return null;
+    const buf = await crypto.subtle.digest('SHA-256', await file.arrayBuffer());
+    return Array.from(new Uint8Array(buf), (b) => b.toString(16).padStart(2, '0')).join('');
+  }
 
   /* ---------- 2. DỮ LIỆU GIẢ LẬP ---------- */
   const SCREENS = {
@@ -20,9 +82,10 @@
     report:    { code: '04_BaoCao',     title: 'Báo cáo lừa đảo',            tab: 'check' },
     learn:     { code: '05_BaiHoc',     title: 'Bài học 01 phút',            tab: 'learn' },
     quiz:      { code: '06_Quiz',       title: 'Bài kiểm tra nhận diện',     tab: 'quiz' },
-    volunteer: { code: '07_TinhNguyen', title: 'Dashboard Đội tình nguyện',  tab: 'volunteer' }
+    volunteer: { code: '07_TinhNguyen', title: 'Dashboard Đội tình nguyện',  tab: 'volunteer' },
+    settings:  { code: '08_CaiDat',     title: 'Cài đặt',                    tab: null }
   };
-  const SCREEN_ORDER = ['home', 'result', 'report', 'learn', 'quiz', 'volunteer'];
+  const SCREEN_ORDER = ['home', 'result', 'report', 'learn', 'quiz', 'volunteer', 'settings'];
 
   const SAMPLES = {
     police: {
@@ -164,15 +227,59 @@
     { name: 'Khác', value: 8, color: '#94A3B8' }
   ];
 
+  /* Người thân mặc định */
+  const DEFAULT_FAMILY = [
+    { id: 'f-minh-anh', name: 'Minh Anh', rel: 'Con gái', phone: '0908123214', color: 1 },
+    { id: 'f-hoang-nam', name: 'Hoàng Nam', rel: 'Con trai', phone: '0977450586', color: 2 }
+  ];
+  const MAX_FAMILY = 5;
+  const DEFAULT_SETTINGS = { background: true, calls: true, links: true, files: false, autoRead: false };
+
+  /* Quét tệp */
+  const MAX_FILE_BYTES = 32 * 1024 * 1024;
+  const RISKY_EXT = ['apk', 'exe', 'scr', 'bat', 'cmd', 'js', 'vbs', 'msi', 'jar', 'ps1', 'dll'];
+  const ARCHIVE_EXT = ['zip', 'rar', '7z', 'docm', 'xlsm', 'pptm', 'iso'];
+  const FILE_TEXT = {
+    danger:  { title: 'Tệp chứa mã độc', sub: 'Không mở, không cài đặt. Xoá tệp này ngay.' },
+    warning: { title: 'Tệp có dấu hiệu đáng ngờ', sub: 'Một vài công cụ cảnh báo. Chưa mở khi chưa xác minh.' },
+    safe:    { title: 'Chưa phát hiện mã độc', sub: 'Vẫn chỉ mở tệp từ người gửi bạn tin tưởng.' }
+  };
+  const DEMO_FILE_RESULT = {
+    name: 'nhan-qua-tri-an.apk', size: 2516582, typeDesc: 'Ứng dụng Android',
+    sha256: '9f2c4e81b7a05d36e1c8f4a2b9d07e53c6a18f20d4b97e6a3c5f81e02d9b7a46',
+    level: 'danger', live: false, permalink: null,
+    stats: { malicious: 38, suspicious: 2, harmless: 0, undetected: 26 },
+    detections: [
+      { engine: 'Công cụ #1', result: 'Trojan-Banker.AndroidOS' },
+      { engine: 'Công cụ #2', result: 'Android/Spy.Banker' },
+      { engine: 'Công cụ #3', result: 'APK:RepMalware [Trj]' },
+      { engine: 'Công cụ #4', result: 'Android.Trojan.SmsSpy' }
+    ]
+  };
+
   /* ---------- 3. TRẠNG THÁI ---------- */
   const state = {
     screen: 'home',
+    prevScreen: 'home',
     senior: false,
     offline: false,
     level: 'danger',
+    resultKind: 'text',
+    fileResult: null,
     checkedText: SAMPLES.police.text,
-    familyEmpty: false,
+    reportPrefill: '',
+    family: store.get('lcs.family', DEFAULT_FAMILY),
+    familyStash: null,
+    emptyOverride: false,
+    settings: { ...DEFAULT_SETTINGS, ...store.get('lcs.settings', {}) },
+    queue: store.get('lcs.queue', []),
     sheetOpen: false,
+    contactEditId: null,
+    contactFrom: null,
+    contactRel: null,
+    deleteArmed: false,
+    file: null,
+    scanToken: null,
     reportType: null,
     forward: true,
     lesson: 0,
@@ -183,8 +290,12 @@
     sampleCursor: 0,
     gallery: false
   };
+  if (!Array.isArray(state.family)) state.family = DEFAULT_FAMILY.slice();
 
-  const timers = { mic: null, typing: null, listen: null, check: null };
+  /* Kết nối máy chủ (server.js) */
+  const api = { checked: false, online: false, vt: false, db: null };
+
+  const timers = { mic: null, typing: null, listen: null, check: null, disarm: null };
 
   /* ---------- 4. DOM ---------- */
   const workspace = document.getElementById('workspace');
@@ -202,6 +313,7 @@
     viewport: $(device, 'viewport'),
     omni: $(device, 'omni'),
     omniInput: $(device, 'omniInput'),
+    fileInput: $(device, 'fileInput'),
     checkBtn: $(device, 'checkBtn'),
     listen: $(device, 'listen'),
     listenBar: $(device, 'listenBar'),
@@ -209,7 +321,10 @@
     sheet: $(device, 'sheet'),
     toastHost: $(device, 'toastHost'),
     reportText: $(device, 'reportText'),
-    exportBtn: $(device, 'exportBtn')
+    exportBtn: $(device, 'exportBtn'),
+    contactForm: $(device, 'contactForm'),
+    contactName: $(device, 'contactName'),
+    contactPhone: $(device, 'contactPhone')
   };
 
   /* ---------- 5. PHÂN TÍCH GIẢ LẬP & KIỂM TRA ĐỊNH DẠNG ---------- */
@@ -228,7 +343,7 @@
   function validate(raw) {
     const text = raw.trim();
     if (!text) {
-      return 'Bạn chưa nhập nội dung. Hãy dán tin nhắn, số điện thoại (10 số) hoặc đường dẫn cần kiểm tra.';
+      return 'Bạn chưa nhập nội dung. Hãy dán tin nhắn, số điện thoại (10 số), đường dẫn – hoặc bấm “Quét tệp” để kiểm tra tệp.';
     }
     const compact = text.replace(/[\s.\-+()]/g, '');
     if (/^\d+$/.test(compact)) {
@@ -243,6 +358,13 @@
     if (text.length < 8 && !URL_RE.test(text)) {
       return 'Nội dung quá ngắn để phân tích. Hãy dán nguyên văn tin nhắn hoặc đường dẫn (VD: bit.ly/abc123).';
     }
+    return null;
+  }
+
+  function validateFile(file) {
+    if (!file) return 'Chưa chọn tệp nào.';
+    if (file.size === 0) return `Tệp “${esc(file.name)}” trống (0 byte). Hãy chọn tệp khác.`;
+    if (file.size > MAX_FILE_BYTES) return `Tệp “${esc(file.name)}” nặng ${formatSize(file.size)}, vượt giới hạn 32 MB. Hãy chọn tệp nhỏ hơn.`;
     return null;
   }
 
@@ -264,16 +386,28 @@
       t.classList.toggle('is-active', on);
       if (on) t.setAttribute('aria-current', 'page'); else t.removeAttribute('aria-current');
     });
+    const gear = $(root, 'settingsBtn');
+    if (gear) gear.classList.toggle('is-active', key === 'settings');
+  }
+
+  function setShare(root, level, text) {
+    $(root, 'shareDot').className = 'lv-dot lv-' + level;
+    $(root, 'shareText').textContent = truncate(text, 80);
+  }
+
+  function renderVerdict(root, level, title, sub) {
+    const r = RESULTS[level];
+    $(root, 'verdict').dataset.level = level;
+    $(root, 'verdictIcon').setAttribute('href', '#' + r.icon);
+    $(root, 'verdictBadge').textContent = r.badge;
+    $(root, 'verdictTitle').textContent = title;
+    $(root, 'verdictSub').textContent = sub;
   }
 
   function renderResult(root, level, text) {
     const r = RESULTS[level];
-    const verdict = $(root, 'verdict');
-    verdict.dataset.level = level;
-    $(root, 'verdictIcon').setAttribute('href', '#' + r.icon);
-    $(root, 'verdictBadge').textContent = r.badge;
-    $(root, 'verdictTitle').textContent = r.title;
-    $(root, 'verdictSub').textContent = r.sub;
+    root.querySelector('[data-screen="result"]').classList.remove('is-file');
+    renderVerdict(root, level, r.title, r.sub);
 
     const type = detectType(text);
     $(root, 'checkedType').innerHTML = icon(type.icon) + type.label;
@@ -282,10 +416,47 @@
     root.querySelector('.ai-card').dataset.level = level;
     $(root, 'conf').textContent = r.conf;
     $(root, 'reasons').innerHTML = r.reasons.map((h, i) => `<li data-n="${i + 1}">${h}</li>`).join('');
+    setShare(root, level, text);
+  }
 
-    const dot = $(root, 'shareDot');
-    dot.className = 'lv-dot lv-' + level;
-    $(root, 'shareText').textContent = truncate(text, 80);
+  function renderFileResult(root, f) {
+    root.querySelector('[data-screen="result"]').classList.add('is-file');
+    const t = FILE_TEXT[f.level];
+    renderVerdict(root, f.level, t.title, t.sub);
+
+    $(root, 'rFileName').textContent = f.name;
+    $(root, 'rFileInfo').textContent = formatSize(f.size) + (f.typeDesc ? ` – ${f.typeDesc}` : '');
+    $(root, 'rFileHash').textContent = f.sha256 || 'Trình duyệt không hỗ trợ tính mã SHA-256';
+
+    const card = root.querySelector('.vt-card');
+    card.dataset.level = f.level;
+    const demo = $(root, 'vtDemo');
+    demo.textContent = f.live ? (f.source === 'cache' ? 'Đã có dữ liệu' : 'Vừa phân tích') : 'Dữ liệu demo';
+    demo.classList.toggle('is-live', !!f.live);
+
+    const s = f.stats;
+    const total = s.malicious + s.suspicious + s.harmless + s.undetected;
+    $(root, 'vtFlagged').textContent = s.malicious + s.suspicious;
+    $(root, 'vtTotal').textContent = total;
+    const parts = [
+      ['Nguy hiểm', s.malicious, 'var(--danger)'],
+      ['Đáng ngờ', s.suspicious, 'var(--warn)'],
+      ['An toàn', s.harmless, 'var(--safe)'],
+      ['Không phát hiện', s.undetected, '#CBD5E1']
+    ];
+    $(root, 'vtBar').innerHTML = parts.filter((p) => p[1] > 0).map((p) => `<i style="flex:${p[1]};background:${p[2]}" title="${p[0]}: ${p[1]}"></i>`).join('');
+    $(root, 'vtLegend').innerHTML = parts.map((p) => `<li><i style="background:${p[2]}"></i>${p[0]}<b>${p[1]}</b></li>`).join('');
+
+    const detect = $(root, 'vtDetect');
+    detect.style.display = f.detections.length ? '' : 'none';
+    $(root, 'vtDetectList').innerHTML = f.detections.slice(0, 5)
+      .map((d) => `<li><span>${esc(d.engine)}</span><b title="${esc(d.result)}">${esc(d.result)}</b></li>`).join('');
+
+    const link = $(root, 'vtLink');
+    link.style.display = f.live && f.permalink ? '' : 'none';
+    if (f.permalink) link.href = f.permalink;
+
+    setShare(root, f.level, `Tệp ${f.name} – ${t.title.toLowerCase()}`);
   }
 
   function setError(root, message) {
@@ -312,6 +483,28 @@
     $(root, 'omni').classList.toggle('has-value', value.length > 0);
   }
 
+  function setFileChip(root, file) {
+    const omni = $(root, 'omni');
+    omni.classList.toggle('has-file', !!file);
+    $(root, 'checkLabel').textContent = file ? 'Quét tệp với VirusTotal' : 'Kiểm tra ngay';
+    $(root, 'checkIcon').setAttribute('href', file ? '#i-file-search' : '#i-shield-check');
+    if (file) {
+      $(root, 'fileName').textContent = file.name;
+      $(root, 'fileInfo').textContent = `${formatSize(file.size)} – sẵn sàng quét`;
+    }
+  }
+
+  function setScanStep(root, step, progress) {
+    const order = ['hash', 'lookup', 'analyze'];
+    const idx = order.indexOf(step);
+    $$(root, '[data-ref="vtSteps"] li').forEach((li) => {
+      const i = order.indexOf(li.dataset.step);
+      li.classList.toggle('is-done', step === 'done' || i < idx);
+      li.classList.toggle('is-active', i === idx);
+    });
+    $(root, 'vtRing').style.strokeDasharray = `${progress} 100`;
+  }
+
   function renderLesson(root, index, flipped) {
     const l = LESSONS[index];
     $(root, 'lessonTag').textContent = l.tag;
@@ -322,7 +515,9 @@
       <span class="flip-step"><span class="flip-step-n">${i + 1}</span>
         <span class="flip-step-t"><strong>${s[0]}</strong><small>${s[1]}</small></span>
       </span>`).join('');
-    $(root, 'flip').classList.toggle('is-flipped', !!flipped);
+    const flip = $(root, 'flip');
+    flip.classList.toggle('is-flipped', !!flipped);
+    flip.classList.toggle('is-settled', !!flipped);
     $(root, 'flipInner').setAttribute('aria-label', `Thẻ bài học: ${l.title}. Chạm để lật.`);
 
     $(root, 'lessonList').innerHTML = LESSONS.map((x, i) => i === index ? '' : `
@@ -444,10 +639,73 @@
     }
   }
 
-  function setFamilyEmpty(root, empty) {
-    $(root, 'sheet').classList.toggle('is-empty', empty);
+  /* Người thân: bottom sheet "Hỏi người thân" */
+  function renderFamilySheet(root, family) {
+    $(root, 'sheet').classList.toggle('is-empty', family.length === 0);
+    $(root, 'familyList').innerHTML = family.map((f) => `
+      <li class="family-row">
+        <button class="fr-main" data-action="send-family" data-id="${f.id}">
+          <span class="avatar av-${f.color}">${esc(initials(f.name))}</span>
+          <span class="fr-body"><strong>${esc(f.name)}</strong><small>${esc(f.rel)} · ${maskPhone(f.phone)}</small></span>
+          <span class="fr-send" aria-label="Gửi cảnh báo">${icon('i-send')}<span>Gửi</span></span>
+        </button>
+        <button class="fr-call" data-action="call-family" data-id="${f.id}" aria-label="Gọi ${esc(f.name)}">${icon('i-phone')}</button>
+      </li>`).join('');
+    const more = $(root, 'familyAddMore');
+    if (more) more.style.display = family.length >= MAX_FAMILY ? 'none' : '';
   }
 
+  /* Cài đặt */
+  function renderSettings(root, settings, family) {
+    const guard = $(root, 'guard');
+    guard.classList.toggle('is-off', !settings.background);
+    $(root, 'guardStatus').textContent = settings.background
+      ? 'Đang bảo vệ kể cả khi bạn đóng ứng dụng'
+      : 'Đang tắt. Bạn chỉ được bảo vệ khi mở ứng dụng';
+    $$(root, '[data-action="toggle-background"]').forEach((b) => b.setAttribute('aria-checked', String(settings.background)));
+    $$(root, '[data-action="toggle-option"]').forEach((b) => b.setAttribute('aria-checked', String(!!settings[b.dataset.option])));
+
+    $(root, 'familyCount').textContent = `${family.length}/${MAX_FAMILY}`;
+    $(root, 'contactList').innerHTML = family.length
+      ? family.map((f) => `
+        <li class="contact-row">
+          <button class="contact-main" data-action="edit-contact" data-id="${f.id}">
+            <span class="avatar av-${f.color}">${esc(initials(f.name))}</span>
+            <span class="set-text"><strong>${esc(f.name)}</strong><small>${esc(f.rel)} – ${formatPhone(f.phone)}</small></span>
+          </button>
+          <button class="contact-edit" data-action="edit-contact" data-id="${f.id}" aria-label="Sửa thông tin ${esc(f.name)}">${icon('i-pencil')}</button>
+        </li>`).join('')
+      : '<li class="contact-empty">Chưa có người thân nào. Thêm ít nhất 1 người để dùng nút “Hỏi người thân”.</li>';
+    const add = $(root, 'addContactBtn');
+    add.disabled = family.length >= MAX_FAMILY;
+    add.lastChild.textContent = family.length >= MAX_FAMILY ? 'Đã đủ 5 người thân' : 'Thêm người thân';
+  }
+
+  function renderServerStatus(root) {
+    const serverDot = $(root, 'serverDot');
+    const vtDot = $(root, 'vtDot');
+    let serverText;
+    if (!api.checked) serverText = 'Đang kiểm tra kết nối…';
+    else if (state.offline) serverText = 'Mất mạng – báo cáo mới sẽ chờ gửi';
+    else if (api.online) serverText = `Đã kết nối – lưu trong cơ sở dữ liệu ${api.db === 'sqlite' ? 'SQLite' : 'JSON'}`;
+    else serverText = 'Chưa kết nối – đang chạy bản demo';
+    $(root, 'serverText').textContent = serverText;
+    serverDot.className = 'status-dot' + (api.online && !state.offline ? ' is-ok' : api.checked ? ' is-warn' : '');
+
+    let vtText;
+    if (!api.checked) vtText = 'Đang kiểm tra…';
+    else if (api.online && api.vt) vtText = 'Sẵn sàng quét bằng VirusTotal';
+    else if (api.online) vtText = 'Máy chủ chưa có khoá API – quét ở chế độ demo';
+    else vtText = 'Chế độ demo – kết quả quét là dữ liệu mẫu';
+    $(root, 'vtText').textContent = vtText;
+    vtDot.className = 'status-dot' + (api.online && api.vt && !state.offline ? ' is-ok' : api.checked ? ' is-warn' : '');
+
+    const n = state.queue.length;
+    $(root, 'queueText').textContent = n ? `${n} báo cáo đang chờ gửi lên máy chủ` : 'Không có báo cáo nào đang chờ';
+    $(root, 'flushBtn').disabled = !n || state.offline || !api.online;
+  }
+
+  /* Báo cáo */
   function selectReportType(root, type) {
     $$(root, '.type-card').forEach((c) => c.setAttribute('aria-checked', String(c.dataset.type === type)));
     $(root, 'typeError').classList.remove('is-visible');
@@ -460,6 +718,34 @@
       s.classList.toggle('is-done', allDone || n < step);
       s.classList.toggle('is-active', !allDone && n === step);
     });
+  }
+
+  function renderReportDone(root, mode, info = {}) {
+    const panel = $(root, 'reportDone');
+    panel.dataset.mode = mode;
+    const code = info.code ? `<b>#${esc(info.code)}</b>` : '';
+    const copy = {
+      sent: {
+        icon: 'i-check', title: 'Đã gửi báo cáo',
+        text: `Mã tiếp nhận ${code}. Cảm ơn bạn đã góp phần bảo vệ cộng đồng Đồng Nai.`,
+        server: 'Đã lưu vào cơ sở dữ liệu máy chủ'
+      },
+      queued: {
+        icon: 'i-clock', title: 'Đã lưu tạm báo cáo',
+        text: 'Báo cáo sẽ <b>tự động gửi</b> ngay khi điện thoại có mạng trở lại. Bạn không cần làm gì thêm.',
+        server: `${info.pending || 1} báo cáo đang chờ gửi`
+      },
+      demo: {
+        icon: 'i-check', title: 'Đã ghi nhận báo cáo',
+        text: `Mã tiếp nhận ${code}. Đây là bản demo nên báo cáo chưa được gửi lên máy chủ.`,
+        server: 'Bản demo – chưa kết nối máy chủ'
+      }
+    }[mode];
+    $(root, 'doneIcon').setAttribute('href', '#' + copy.icon);
+    $(root, 'doneTitle').textContent = copy.title;
+    $(root, 'doneText').innerHTML = copy.text;
+    $(root, 'doneServerText').textContent = copy.server;
+    $(root, 'doneMeta').style.display = info.forward === false ? 'none' : '';
   }
 
   function setReportDone(root, done) {
@@ -475,6 +761,11 @@
     closeSheet();
 
     if (key === 'report') prepareReport();
+    if (key === 'settings') {
+      if (state.screen !== 'settings') state.prevScreen = state.screen;
+      renderSettings(device, state.settings, state.family);
+      renderServerStatus(device);
+    }
 
     state.screen = key;
     setScreen(device, key);
@@ -487,9 +778,13 @@
 
   function updateStageLabel() {
     if (state.sheetOpen) {
-      const poster = ui.sheet.dataset.mode === 'poster';
-      stageCode.textContent = poster ? '07_TinhNguyen' : '03_HoiNguoiThan';
-      stageTitle.textContent = poster ? 'Bottom sheet – Ảnh tuyên truyền' : 'Bottom sheet – Hỏi người thân';
+      const mode = ui.sheet.dataset.mode;
+      const labels = {
+        family: ['03_HoiNguoiThan', 'Bottom sheet – Hỏi người thân'],
+        poster: ['07_TinhNguyen', 'Bottom sheet – Ảnh tuyên truyền'],
+        contact: ['08_CaiDat', state.contactEditId ? 'Bottom sheet – Sửa người thân' : 'Bottom sheet – Thêm người thân']
+      };
+      [stageCode.textContent, stageTitle.textContent] = labels[mode];
       return;
     }
     stageCode.textContent = SCREENS[state.screen].code;
@@ -512,12 +807,13 @@
       el.classList.add('is-leaving');
       el.addEventListener('animationend', () => el.remove(), { once: true });
       setTimeout(() => el.remove(), 600);
-    }, 3200);
+    }, 3400);
   }
 
-  /* ---------- 9. TRANG CHỦ: KIỂM TRA, MICRO ---------- */
+  /* ---------- 9. TRANG CHỦ: KIỂM TRA VĂN BẢN, MICRO ---------- */
   function runCheck() {
-    if (ui.checkBtn.classList.contains('is-loading')) return;
+    if (ui.checkBtn.classList.contains('is-loading') || state.scanToken) return;
+    if (state.file) { runFileScan(state.file); return; }
     stopMic(false);
     const value = ui.omniInput.value.trim();
     const err = validate(value);
@@ -536,11 +832,17 @@
       ui.omni.classList.remove('is-scanning');
       ui.checkBtn.classList.remove('is-loading');
       state.level = analyze(value);
+      state.resultKind = 'text';
       state.checkedText = value;
       renderResult(device, state.level, value);
       syncLevelButtons();
       go('result');
+      maybeAutoRead();
     }, 600);
+  }
+
+  function maybeAutoRead() {
+    if (state.settings.autoRead && state.level === 'danger') setTimeout(startListen, 450);
   }
 
   function startMic() {
@@ -577,9 +879,131 @@
 
   function stopTyping() { clearInterval(timers.typing); }
 
-  /* ---------- 10. KẾT QUẢ: NGHE ĐỌC ---------- */
+  /* ---------- 10. QUÉT TỆP (VirusTotal qua server.js) ---------- */
+  function chooseFile(file) {
+    const err = validateFile(file);
+    if (err) {
+      state.file = null;
+      setFileChip(device, null);
+      setError(device, err);
+      return;
+    }
+    stopMic(false);
+    stopTyping();
+    setError(device, null);
+    state.file = file;
+    setFileChip(device, file);
+  }
+
+  function clearFile() {
+    state.file = null;
+    setFileChip(device, null);
+    setError(device, null);
+  }
+
+  function endScan() {
+    state.scanToken = null;
+    ui.omni.classList.remove('is-file-scanning');
+    setScanStep(device, 'hash', 0);
+  }
+
+  async function runFileScan(file, { demo = false } = {}) {
+    const err = validateFile(file);
+    if (err) { setError(device, err); return; }
+    if (state.offline) {
+      setError(device, 'Cần có mạng để quét tệp bằng VirusTotal. Hãy thử lại khi điện thoại có kết nối.');
+      return;
+    }
+    setError(device, null);
+    const token = { cancelled: false };
+    state.scanToken = token;
+    ui.omni.classList.add('is-file-scanning');
+    setScanStep(device, 'hash', 8);
+    $(device, 'vtAnalyzeText').textContent = 'Phân tích bằng các công cụ diệt virus';
+
+    try {
+      const [sha] = await Promise.all([sha256Hex(file).catch(() => null), delay(450)]);
+      if (token.cancelled) return;
+      setScanStep(device, 'lookup', 28);
+
+      const useServer = !demo && api.online && api.vt;
+      const result = useServer ? await scanViaServer(file, token) : await scanDemo(file, sha, token);
+      if (token.cancelled) return;
+
+      setScanStep(device, 'done', 100);
+      await delay(450);
+      if (token.cancelled) return;
+      endScan();
+
+      state.resultKind = 'file';
+      state.fileResult = result;
+      state.level = result.level;
+      state.checkedText = `Tệp “${result.name}” (SHA-256: ${result.sha256 ? result.sha256.slice(0, 16) + '…' : 'không rõ'}) – ${FILE_TEXT[result.level].title.toLowerCase()}`;
+      renderFileResult(device, result);
+      syncLevelButtons();
+      clearFile();
+      go('result');
+      maybeAutoRead();
+    } catch (e) {
+      if (token.cancelled) return;
+      endScan();
+      setError(device, esc(e.message || 'Không quét được tệp. Hãy thử lại.'));
+    }
+  }
+
+  async function scanViaServer(file, token) {
+    const first = await fetchJSON('/api/scan', {
+      method: 'POST',
+      body: file,
+      headers: { 'Content-Type': 'application/octet-stream', 'X-File-Name': encodeURIComponent(file.name) }
+    }, 120000);
+    if (first.status === 'completed') {
+      setScanStep(device, 'analyze', 85);
+      return first.result;
+    }
+    // Tệp mới: VirusTotal cần thời gian phân tích. Gói miễn phí giới hạn 4 lượt/phút nên hỏi lại mỗi 15 giây.
+    setScanStep(device, 'analyze', 40);
+    for (let i = 1; i <= 10; i++) {
+      $(device, 'vtAnalyzeText').textContent = `Đang phân tích… lần kiểm tra ${i}/10`;
+      await delay(15000);
+      if (token.cancelled) return null;
+      const r = await fetchJSON(`/api/scan/${encodeURIComponent(first.analysisId)}`, {}, 20000);
+      setScanStep(device, 'analyze', Math.min(95, 40 + i * 6));
+      if (r.status === 'completed') return r.result;
+    }
+    throw new Error('VirusTotal vẫn đang phân tích tệp này. Hãy thử quét lại sau ít phút – kết quả sẽ có ngay vì tệp đã nằm trong kho.');
+  }
+
+  async function scanDemo(file, sha, token) {
+    await delay(900);
+    if (token.cancelled) return null;
+    setScanStep(device, 'analyze', 55);
+    for (let p = 60; p <= 90; p += 10) {
+      await delay(300);
+      if (token.cancelled) return null;
+      setScanStep(device, 'analyze', p);
+    }
+    const ext = (file.name.split('.').pop() || '').toLowerCase();
+    let level = 'safe';
+    if (RISKY_EXT.includes(ext)) level = 'danger';
+    else if (ARCHIVE_EXT.includes(ext)) level = 'warning';
+    const stats = {
+      danger: { malicious: 38, suspicious: 2, harmless: 0, undetected: 26 },
+      warning: { malicious: 1, suspicious: 2, harmless: 0, undetected: 63 },
+      safe: { malicious: 0, suspicious: 0, harmless: 0, undetected: 66 }
+    }[level];
+    return {
+      name: file.name, size: file.size, typeDesc: file.type || '', sha256: sha,
+      level, live: false, permalink: null, stats,
+      detections: level === 'danger' ? DEMO_FILE_RESULT.detections
+        : level === 'warning' ? [{ engine: 'Công cụ #1', result: 'Suspicious.Archive.Gen' }] : []
+    };
+  }
+
+  /* ---------- 11. KẾT QUẢ: NGHE ĐỌC ---------- */
   const LISTEN_SECONDS = 12;
   function startListen() {
+    clearInterval(timers.listen);
     ui.listen.classList.add('is-playing');
     ui.listen.setAttribute('aria-pressed', 'true');
     const start = Date.now();
@@ -597,23 +1021,26 @@
     ui.listenBar.style.width = '0%';
   }
 
-  /* ---------- 11. BOTTOM SHEET ---------- */
+  /* ---------- 12. BOTTOM SHEET ---------- */
   function openSheet(mode = 'family') {
     ui.sheet.dataset.mode = mode;
-    ui.sheet.setAttribute('aria-label', mode === 'poster' ? 'Ảnh tuyên truyền' : 'Hỏi người thân');
-    setFamilyEmpty(device, state.familyEmpty);
-    $(device, 'shareText').textContent = truncate(state.checkedText, 80);
-    $(device, 'shareDot').className = 'lv-dot lv-' + state.level;
-    $$(device, '.fr-main').forEach(resetSendRow);
+    const labels = { family: 'Hỏi người thân', poster: 'Ảnh tuyên truyền', contact: 'Thông tin người thân' };
+    ui.sheet.setAttribute('aria-label', labels[mode]);
+    if (mode === 'family') {
+      renderFamilySheet(device, state.family);
+      setShare(device, state.level, state.resultKind === 'file' && state.fileResult
+        ? `Tệp ${state.fileResult.name} – ${FILE_TEXT[state.fileResult.level].title.toLowerCase()}`
+        : state.checkedText);
+    }
     ui.sheet.scrollTop = 0;
     ui.sheetLayer.classList.add('is-open');
     ui.sheetLayer.setAttribute('aria-hidden', 'false');
     state.sheetOpen = true;
     updateStageLabel();
     setTimeout(() => {
-      const close = ui.sheet.querySelector(`.pane-${mode} [data-action="close-sheet"]`);
-      if (close) close.focus({ preventScroll: true });
-    }, 350);
+      const target = mode === 'contact' ? ui.contactName : ui.sheet.querySelector(`.pane-${mode} [data-action="close-sheet"]`);
+      if (target) target.focus({ preventScroll: true });
+    }, 380);
   }
 
   function closeSheet() {
@@ -621,21 +1048,139 @@
     ui.sheetLayer.classList.remove('is-open');
     ui.sheetLayer.setAttribute('aria-hidden', 'true');
     state.sheetOpen = false;
+    disarmDelete();
     updateStageLabel();
   }
 
-  function resetSendRow(btn) {
-    btn.classList.remove('is-sent');
-    const label = btn.querySelector('.fr-send span');
-    const use = btn.querySelector('.fr-send use');
-    if (label) label.textContent = 'Gửi';
-    if (use) use.setAttribute('href', '#i-send');
+  /* ---------- 13. NGƯỜI THÂN: THÊM / SỬA / XOÁ ---------- */
+  function saveFamily() {
+    if (!state.emptyOverride) store.set('lcs.family', state.family);
+    renderFamilySheet(device, state.family);
+    renderSettings(device, state.settings, state.family);
   }
 
-  /* ---------- 12. BÁO CÁO ---------- */
+  function setContactRel(root, rel) {
+    $$(root, '.rel-chip').forEach((c) => c.setAttribute('aria-checked', String(c.dataset.rel === rel)));
+  }
+
+  function clearContactErrors(root) {
+    ['name', 'phone'].forEach((k) => $(root, k + 'Wrap').classList.remove('is-error'));
+    ['nameError', 'phoneError', 'relError'].forEach((k) => $(root, k).classList.remove('is-visible'));
+  }
+
+  function showFieldError(root, field, message) {
+    const err = $(root, field + 'Error');
+    err.textContent = message;
+    err.classList.add('is-visible');
+    const wrap = $(root, field + 'Wrap');
+    if (wrap) {
+      wrap.classList.remove('is-error');
+      void wrap.offsetWidth;
+      wrap.classList.add('is-error');
+    }
+  }
+
+  function fillContactForm(root, contact) {
+    const form = $(root, 'contactForm');
+    form.classList.toggle('is-edit', !!contact);
+    $(root, 'contactTitle').textContent = contact ? 'Sửa thông tin người thân' : 'Thêm người thân';
+    $(root, 'contactSaveLabel').textContent = contact ? 'Lưu thay đổi' : 'Lưu người thân';
+    $(root, 'contactName').value = contact ? contact.name : '';
+    $(root, 'contactPhone').value = contact ? formatPhone(contact.phone) : '';
+    setContactRel(root, contact ? contact.rel : null);
+    clearContactErrors(root);
+  }
+
+  function openContactForm(id, from) {
+    if (!id && state.family.length >= MAX_FAMILY && !state.emptyOverride) {
+      toast({ type: 'info', title: 'Đã đủ 5 người thân', desc: 'Xoá bớt một người trong Cài đặt để thêm người mới.', iconId: 'i-users' });
+      return;
+    }
+    const contact = id ? state.family.find((f) => f.id === id) : null;
+    state.contactEditId = contact ? contact.id : null;
+    state.contactFrom = from || null;
+    state.contactRel = contact ? contact.rel : null;
+    disarmDelete();
+    fillContactForm(device, contact);
+    openSheet('contact');
+  }
+
+  function submitContact() {
+    clearContactErrors(device);
+    const name = ui.contactName.value.trim().replace(/\s+/g, ' ');
+    const phone = normalizePhone(ui.contactPhone.value);
+    const rel = state.contactRel;
+    let ok = true;
+
+    if (name.length < 2) { showFieldError(device, 'name', 'Nhập họ tên người thân (ít nhất 2 ký tự).'); ok = false; }
+    if (!rel) { showFieldError(device, 'rel', 'Chọn mối quan hệ với người này.'); ok = false; }
+    if (!phone) { showFieldError(device, 'phone', 'Nhập số điện thoại để có thể gửi cảnh báo.'); ok = false; }
+    else if (!isValidPhone(phone)) { showFieldError(device, 'phone', 'Số điện thoại chưa đúng. Nhập 10 chữ số, bắt đầu bằng 0 (VD: 0912 345 678).'); ok = false; }
+    else {
+      const pool = state.emptyOverride ? [] : state.family;
+      const dup = pool.find((f) => f.phone === phone && f.id !== state.contactEditId);
+      if (dup) { showFieldError(device, 'phone', `Số này đã có trong danh sách (${dup.name}).`); ok = false; }
+    }
+    if (!ok) return;
+
+    const editing = !!state.contactEditId;
+    if (state.emptyOverride) {
+      // Đang ở trạng thái "danh sách trống": người vừa thêm trở thành người thân đầu tiên.
+      state.emptyOverride = false;
+      state.familyStash = null;
+      state.family = [];
+      syncToggles();
+    }
+    if (editing) {
+      state.family = state.family.map((f) => (f.id === state.contactEditId ? { ...f, name, phone, rel } : f));
+    } else {
+      const used = state.family.map((f) => f.color);
+      const color = [1, 2, 3, 4, 5].find((c) => !used.includes(c)) || 1;
+      state.family = [...state.family, { id: 'f-' + uid(), name, rel, phone, color }];
+    }
+    saveFamily();
+    toast({
+      type: 'success',
+      title: editing ? `Đã lưu thay đổi cho ${esc(name)}` : `Đã thêm ${esc(name)} vào danh sách người thân`,
+      desc: `${esc(rel)} – ${formatPhone(phone)}`,
+      iconId: editing ? 'i-check' : 'i-user-plus'
+    });
+    if (state.contactFrom === 'family') openSheet('family');
+    else closeSheet();
+  }
+
+  function disarmDelete() {
+    clearTimeout(timers.disarm);
+    state.deleteArmed = false;
+    const btn = $(device, 'contactDelete');
+    btn.classList.remove('is-confirm');
+    $(device, 'contactDeleteLabel').textContent = 'Xoá người thân này';
+  }
+
+  function deleteContact() {
+    if (!state.contactEditId) return;
+    if (!state.deleteArmed) {
+      state.deleteArmed = true;
+      $(device, 'contactDelete').classList.add('is-confirm');
+      $(device, 'contactDeleteLabel').textContent = 'Bấm lần nữa để xoá';
+      timers.disarm = setTimeout(disarmDelete, 3500);
+      return;
+    }
+    const removed = state.family.find((f) => f.id === state.contactEditId);
+    state.family = state.family.filter((f) => f.id !== state.contactEditId);
+    saveFamily();
+    closeSheet();
+    toast({ type: 'info', title: `Đã xoá ${esc(removed ? removed.name : 'người thân')} khỏi danh sách`, iconId: 'i-trash' });
+  }
+
+  /* ---------- 14. BÁO CÁO: GỬI LÊN MÁY CHỦ, HÀNG ĐỢI KHI MẤT MẠNG ---------- */
   function prepareReport() {
     if (device.querySelector('[data-screen="report"]').classList.contains('is-done')) resetReport();
-    if (!ui.reportText.value.trim()) ui.reportText.value = state.checkedText;
+    const current = ui.reportText.value.trim();
+    if (!current || current === state.reportPrefill) {
+      ui.reportText.value = state.checkedText;
+      state.reportPrefill = state.checkedText;
+    }
   }
 
   function resetReport() {
@@ -643,12 +1188,25 @@
     setReportDone(device, false);
     selectReportType(device, null);
     ui.reportText.value = state.checkedText;
-    const submit = $(device, 'reportSubmit');
-    submit.classList.remove('is-loading');
+    state.reportPrefill = state.checkedText;
+    $(device, 'reportSubmit').classList.remove('is-loading');
+    $(device, 'reportError').classList.remove('is-visible');
   }
 
-  function submitReport() {
+  function enqueue(payload) {
+    state.queue = [...state.queue, { ...payload, queuedOffline: true }];
+    store.set('lcs.queue', state.queue);
+    renderServerStatus(device);
+  }
+
+  async function postReport(payload) {
+    return fetchJSON('/api/reports', { method: 'POST', json: payload }, 10000);
+  }
+
+  async function submitReport() {
     const submit = $(device, 'reportSubmit');
+    if (submit.classList.contains('is-loading')) return;
+    $(device, 'reportError').classList.remove('is-visible');
     if (!state.reportType) {
       const grid = $(device, 'typeGrid');
       grid.classList.remove('is-error');
@@ -659,17 +1217,98 @@
       return;
     }
     if (!ui.reportText.value.trim()) ui.reportText.value = state.checkedText;
+
+    const payload = {
+      clientId: uid(),
+      type: state.reportType,
+      content: ui.reportText.value.trim().slice(0, 2000),
+      forwardPolice: state.forward,
+      riskLevel: state.level,
+      clientCreatedAt: new Date().toISOString()
+    };
     submit.classList.add('is-loading');
     setStep(device, 3);
-    setTimeout(() => {
+
+    const finish = (mode, info) => {
       submit.classList.remove('is-loading');
-      $(device, 'doneMeta').style.display = state.forward ? '' : 'none';
+      renderReportDone(device, mode, { forward: state.forward, ...info });
       setReportDone(device, true);
       ui.viewport.scrollTo({ top: 0, behavior: 'auto' });
-    }, 750);
+    };
+
+    if (state.offline) {
+      await delay(500);
+      enqueue(payload);
+      finish('queued', { pending: state.queue.length });
+      return;
+    }
+    if (!api.online) {
+      await delay(700);
+      const d = new Date();
+      const code = `DN-${String(d.getDate()).padStart(2, '0')}${String(d.getMonth() + 1).padStart(2, '0')}-${String(Math.floor(Math.random() * 9000) + 1000)}`;
+      finish('demo', { code });
+      return;
+    }
+    try {
+      const res = await postReport(payload);
+      finish('sent', { code: res.code });
+    } catch (e) {
+      if (e.status && e.status < 500) {
+        submit.classList.remove('is-loading');
+        setStep(device, 2);
+        $(device, 'reportErrorText').textContent = e.message;
+        $(device, 'reportError').classList.add('is-visible');
+        return;
+      }
+      // Máy chủ không phản hồi: giữ lại để tự gửi sau.
+      enqueue(payload);
+      finish('queued', { pending: state.queue.length });
+    }
   }
 
-  /* ---------- 13. QUIZ ---------- */
+  let flushing = false;
+  async function flushQueue({ silent = false } = {}) {
+    if (flushing || state.offline || !api.online || !state.queue.length) {
+      if (!silent && !api.online) toast({ type: 'info', title: 'Chưa kết nối máy chủ', desc: 'Báo cáo sẽ được gửi khi máy chủ hoạt động.', iconId: 'i-server' });
+      return;
+    }
+    flushing = true;
+    let sent = 0;
+    const remaining = [];
+    for (const item of state.queue) {
+      try {
+        await postReport(item);
+        sent += 1;
+      } catch (e) {
+        if (!(e.status && e.status < 500)) remaining.push(item); // lỗi mạng: giữ lại; lỗi dữ liệu: bỏ
+      }
+    }
+    state.queue = remaining;
+    store.set('lcs.queue', state.queue);
+    flushing = false;
+    renderServerStatus(device);
+    if (sent) toast({ type: 'success', title: `Đã gửi ${sent} báo cáo đang chờ`, desc: 'Báo cáo đã được lưu vào cơ sở dữ liệu máy chủ.', iconId: 'i-server' });
+  }
+
+  async function detectServer() {
+    if (location.protocol === 'file:') {
+      api.checked = true;
+    } else {
+      try {
+        const h = await fetchJSON('/api/health', {}, 2500);
+        api.online = !!h.ok;
+        api.vt = !!h.virustotal;
+        api.db = h.database || null;
+      } catch {
+        api.online = false;
+      }
+      api.checked = true;
+    }
+    renderServerStatus(device);
+    flushQueue({ silent: true });
+  }
+
+  /* ---------- 15. QUIZ ---------- */
   function answerQuiz(choice) {
     if (state.quizAnswered) return;
     state.quizAnswered = true;
@@ -685,16 +1324,12 @@
     }
     setTimeout(() => {
       const explain = $(device, 'explain');
-      const top = explain.offsetTop - 120;
-      ui.viewport.scrollTo({ top: Math.max(0, top), behavior: 'smooth' });
+      ui.viewport.scrollTo({ top: Math.max(0, explain.offsetTop - 120), behavior: 'smooth' });
     }, 250);
   }
 
   function nextQuiz() {
-    if (state.quizIndex >= QUIZ.length - 1) {
-      finishQuiz();
-      return;
-    }
+    if (state.quizIndex >= QUIZ.length - 1) { finishQuiz(); return; }
     state.quizIndex += 1;
     state.quizAnswered = false;
     renderQuiz(device, state.quizIndex, null, state.quizScore);
@@ -702,8 +1337,7 @@
   }
 
   function finishQuiz() {
-    const screen = device.querySelector('[data-screen="quiz"]');
-    screen.classList.add('is-finished');
+    device.querySelector('[data-screen="quiz"]').classList.add('is-finished');
     $$(device, '[data-ref="quizBars"] i').forEach((b) => (b.className = 'is-done'));
     $(device, 'doneScore').textContent = state.quizScore;
     $(device, 'doneText').textContent = state.quizScore >= 80
@@ -720,14 +1354,13 @@
     ui.viewport.scrollTo({ top: 0, behavior: 'auto' });
   }
 
-  /* ---------- 14. CHẾ ĐỘ: A+, OFFLINE, TRỐNG ---------- */
+  /* ---------- 16. CHẾ ĐỘ: A+, OFFLINE, TRỐNG ---------- */
   function syncToggles() {
     $$(document, '[data-action="toggle-senior"]').forEach((b) => b.setAttribute('aria-checked', String(state.senior)));
     $$(document, '[data-action="toggle-offline"]').forEach((b) => b.setAttribute('aria-checked', String(state.offline)));
-    $$(document, '[data-action="toggle-empty"]').forEach((b) => b.setAttribute('aria-checked', String(state.familyEmpty)));
+    $$(document, '[data-action="toggle-empty"]').forEach((b) => b.setAttribute('aria-checked', String(state.emptyOverride)));
     device.classList.toggle('is-senior', state.senior);
     device.classList.toggle('is-offline', state.offline);
-    setFamilyEmpty(device, state.familyEmpty);
   }
 
   function syncLevelButtons() {
@@ -750,33 +1383,79 @@
   function toggleOffline() {
     state.offline = !state.offline;
     syncToggles();
+    renderServerStatus(device);
     toast(state.offline
       ? { type: 'warn', title: 'Mất kết nối mạng', desc: 'Đã chuyển sang kiểm tra bằng dữ liệu trên máy.' }
-      : { type: 'success', title: 'Đã kết nối lại', desc: 'Báo cáo lưu tạm sẽ được gửi tự động.', iconId: 'i-wifi' });
+      : { type: 'success', title: 'Đã kết nối lại', desc: state.queue.length ? `Đang gửi ${state.queue.length} báo cáo lưu tạm…` : 'Mọi tính năng đã hoạt động bình thường.', iconId: 'i-wifi' });
+    if (!state.offline) setTimeout(() => flushQueue({ silent: true }), 600);
     if (state.gallery) buildGallery();
   }
 
-  /* ---------- 15. GALLERY VIEW ---------- */
+  function toggleEmpty() {
+    if (!state.emptyOverride) {
+      state.familyStash = state.family;
+      state.family = [];
+      state.emptyOverride = true;
+    } else {
+      state.family = state.familyStash || store.get('lcs.family', DEFAULT_FAMILY);
+      state.familyStash = null;
+      state.emptyOverride = false;
+    }
+    syncToggles();
+    renderFamilySheet(device, state.family);
+    renderSettings(device, state.settings, state.family);
+  }
+
+  /* ---------- 17. THẺ LẬT (BÀI HỌC) ---------- */
+  function flipCard() {
+    const flip = $(device, 'flip');
+    if (flip.classList.contains('is-flipped')) {
+      // Khôi phục trạng thái 3D (không hiệu ứng) rồi mới lật ngược lại
+      flip.classList.add('no-anim');
+      flip.classList.remove('is-settled');
+      void flip.offsetWidth;
+      flip.classList.remove('no-anim');
+      requestAnimationFrame(() => flip.classList.remove('is-flipped'));
+    } else {
+      flip.classList.add('is-flipped');
+      if (!state.learned.has(state.lesson)) {
+        state.learned.add(state.lesson);
+        $(device, 'learnProgress').innerHTML = `${icon('i-star')}${2 + state.learned.size}/12 bài`;
+      }
+    }
+  }
+
+  /* ---------- 18. GALLERY VIEW ---------- */
   let template = null;
 
   const GALLERY = [
     { code: '01_TrangChu', name: 'Trang chủ & Kiểm tra nhanh', screen: 'home' },
     { code: '01_TrangChu · Lỗi', name: 'Error State – nhập sai định dạng', screen: 'home',
       setup: (r) => { setInputValue(r, '09123'); setError(r, validate('09123')); } },
+    { code: '01_TrangChu · Quét tệp', name: 'Quét tệp – đang phân tích VirusTotal', screen: 'home',
+      setup: (r) => {
+        setFileChip(r, { name: DEMO_FILE_RESULT.name, size: DEMO_FILE_RESULT.size });
+        $(r, 'omni').classList.add('is-file-scanning');
+        setScanStep(r, 'analyze', 70);
+      } },
     { code: '02_KetQua · Nguy hiểm', name: 'Kết quả – mức Đỏ', screen: 'result',
       setup: (r) => renderResult(r, 'danger', SAMPLES.police.text) },
     { code: '02_KetQua · Nghi ngờ', name: 'Kết quả – mức Vàng', screen: 'result',
       setup: (r) => renderResult(r, 'warning', SAMPLES.gift.text) },
     { code: '02_KetQua · An toàn', name: 'Kết quả – mức Xanh', screen: 'result',
       setup: (r) => renderResult(r, 'safe', SAMPLES.safe.text) },
+    { code: '02_KetQua · Tệp', name: 'Kết quả quét tệp VirusTotal', screen: 'result',
+      setup: (r) => renderFileResult(r, DEMO_FILE_RESULT) },
     { code: '03_HoiNguoiThan', name: 'Bottom sheet – danh sách người thân', screen: 'result',
-      setup: (r) => { renderResult(r, 'danger', SAMPLES.police.text); setFamilyEmpty(r, false); openStaticSheet(r, 'family'); } },
+      setup: (r) => { renderResult(r, 'danger', SAMPLES.police.text); openStaticSheet(r, 'family'); } },
     { code: '03_HoiNguoiThan · Trống', name: 'Empty State – chưa có người thân', screen: 'result',
-      setup: (r) => { renderResult(r, 'danger', SAMPLES.police.text); setFamilyEmpty(r, true); openStaticSheet(r, 'family'); } },
+      setup: (r) => { renderResult(r, 'danger', SAMPLES.police.text); renderFamilySheet(r, []); openStaticSheet(r, 'family'); } },
     { code: '04_BaoCao', name: 'Báo cáo – chọn loại & thông tin', screen: 'report',
       setup: (r) => { selectReportType(r, 'call'); $(r, 'reportText').value = SAMPLES.police.text; } },
-    { code: '04_BaoCao · Hoàn tất', name: 'Báo cáo – gửi thành công / lưu tạm', screen: 'report',
-      setup: (r) => { selectReportType(r, 'call'); setReportDone(r, true); } },
+    { code: '04_BaoCao · Hoàn tất', name: 'Báo cáo – đã lưu vào máy chủ', screen: 'report',
+      setup: (r) => { selectReportType(r, 'call'); renderReportDone(r, 'sent', { code: 'DN-2411-0482' }); setReportDone(r, true); } },
+    { code: '04_BaoCao · Lưu tạm', name: 'Báo cáo – mất mạng, chờ gửi', screen: 'report',
+      setup: (r) => { selectReportType(r, 'call'); renderReportDone(r, 'queued', { pending: 1 }); setReportDone(r, true); } },
     { code: '05_BaiHoc', name: 'Bài học – mặt trước thẻ', screen: 'learn',
       setup: (r) => renderLesson(r, 0, false) },
     { code: '05_BaiHoc · Mặt sau', name: 'Bài học – 3 bước xử lý', screen: 'learn',
@@ -787,13 +1466,22 @@
       setup: (r) => renderQuiz(r, 0, 'scam', 20) },
     { code: '07_TinhNguyen', name: 'Dashboard đội tình nguyện', screen: 'volunteer' },
     { code: '07_TinhNguyen · Ảnh', name: 'Xuất ảnh tuyên truyền nhanh', screen: 'volunteer',
-      setup: (r) => openStaticSheet(r, 'poster') }
+      setup: (r) => openStaticSheet(r, 'poster') },
+    { code: '08_CaiDat', name: 'Cài đặt – chạy ngầm, hiển thị, người thân', screen: 'settings' },
+    { code: '08_CaiDat · Thêm người thân', name: 'Form thêm người thân – lỗi số điện thoại', screen: 'settings',
+      setup: (r) => {
+        fillContactForm(r, null);
+        $(r, 'contactName').value = 'Nguyễn Thu Hà';
+        setContactRel(r, 'Cháu');
+        $(r, 'contactPhone').value = '0912 345';
+        showFieldError(r, 'phone', 'Số điện thoại chưa đúng. Nhập 10 chữ số, bắt đầu bằng 0 (VD: 0912 345 678).');
+        openStaticSheet(r, 'contact');
+      } }
   ];
 
   function openStaticSheet(root, mode) {
-    const layer = $(root, 'sheetLayer');
     $(root, 'sheet').dataset.mode = mode;
-    layer.classList.add('is-open');
+    $(root, 'sheetLayer').classList.add('is-open');
   }
 
   function buildGallery() {
@@ -804,12 +1492,15 @@
       clone.removeAttribute('id');
       $$(clone, '[id]').forEach((n) => n.removeAttribute('id'));
       $$(clone, '[for]').forEach((n) => n.removeAttribute('for'));
-      $$(clone, 'button, textarea').forEach((n) => n.setAttribute('tabindex', '-1'));
+      $$(clone, 'button, textarea, input, a').forEach((n) => n.setAttribute('tabindex', '-1'));
       clone.setAttribute('aria-hidden', 'true');
       clone.classList.add('is-static');
       clone.classList.toggle('is-senior', state.senior);
       clone.classList.toggle('is-offline', state.offline);
       $(clone, 'clock').textContent = '9:41';
+      renderFamilySheet(clone, DEFAULT_FAMILY);
+      renderSettings(clone, DEFAULT_SETTINGS, DEFAULT_FAMILY);
+      renderServerStatus(clone);
       setScreen(clone, item.screen);
       if (item.setup) item.setup(clone);
 
@@ -826,7 +1517,7 @@
       frag.appendChild(card);
     });
     galleryGrid.appendChild(frag);
-    galleryMeta.textContent = `${GALLERY.length} màn hình & trạng thái · Hiển thị: ${state.senior ? 'Người cao tuổi (A+)' : 'Tiêu chuẩn'} · Mạng: ${state.offline ? 'Ngoại tuyến' : 'Trực tuyến'}`;
+    galleryMeta.textContent = `${GALLERY.length} màn hình & trạng thái – Hiển thị: ${state.senior ? 'Người cao tuổi (A+)' : 'Tiêu chuẩn'} – Mạng: ${state.offline ? 'Ngoại tuyến' : 'Trực tuyến'}`;
   }
 
   function toggleGallery(force) {
@@ -839,7 +1530,6 @@
     }
     workspace.classList.toggle('is-gallery', on);
     gallery.hidden = !on;
-    $$(inspector, '[data-action="gallery"]').forEach((b) => b.classList.toggle('is-on', on));
     const label = inspector.querySelector('.ins-gallery-btn strong');
     if (label) label.textContent = on ? 'Về chế độ Prototype' : 'Xem tất cả màn hình';
     window.scrollTo({ top: 0, behavior: 'auto' });
@@ -847,20 +1537,23 @@
     if (!on) fitDevice();
   }
 
-  /* ---------- 16. ACTIONS (event delegation) ---------- */
+  /* ---------- 19. ACTIONS (event delegation) ---------- */
+  const familyById = (id) => state.family.find((f) => f.id === id);
+
   const ACTIONS = {
     go: (el) => go(el.dataset.target),
+    back: () => go(state.prevScreen && state.prevScreen !== 'settings' ? state.prevScreen : 'home'),
     'toggle-senior': toggleSenior,
     'toggle-offline': toggleOffline,
     'toggle-empty': () => {
-      state.familyEmpty = !state.familyEmpty;
-      syncToggles();
       if (state.gallery) toggleGallery(false);
-      if (state.familyEmpty) openSheet('family');
+      toggleEmpty();
+      if (state.emptyOverride) openSheet('family');
     },
     'set-level': (el) => {
       if (state.gallery) toggleGallery(false);
       state.level = el.dataset.level;
+      state.resultKind = 'text';
       state.checkedText = SAMPLE_BY_LEVEL[state.level].text;
       renderResult(device, state.level, state.checkedText);
       syncLevelButtons();
@@ -874,8 +1567,16 @@
       if (state.gallery) toggleGallery(false);
       go('home');
       stopTyping();
+      clearFile();
       setInputValue(device, '09123');
       setTimeout(runCheck, 220);
+    },
+    'edge-file': () => {
+      if (state.gallery) toggleGallery(false);
+      go('home');
+      const sample = new File([new Uint8Array(2048).map((_, i) => (i * 37) % 251)], DEMO_FILE_RESULT.name, { type: 'application/vnd.android.package-archive' });
+      chooseFile(sample);
+      setTimeout(() => runFileScan(sample, { demo: true }), 350);
     },
     gallery: () => toggleGallery(),
     print: () => window.print(),
@@ -887,12 +1588,24 @@
       const s = SAMPLES[keys[state.sampleCursor % keys.length]];
       state.sampleCursor += 1;
       stopMic(false);
-      setError(device, null);
+      clearFile();
       typeInto(s.text);
     },
-    mic: () => (ui.omni.classList.contains('is-listening') ? stopMic(true) : startMic()),
+    'pick-file': () => ui.fileInput.click(),
+    'clear-file': clearFile,
+    'cancel-scan': () => {
+      if (state.scanToken) state.scanToken.cancelled = true;
+      endScan();
+      toast({ type: 'info', title: 'Đã huỷ quét tệp', iconId: 'i-x' });
+    },
+    mic: () => {
+      if (ui.omni.classList.contains('is-listening')) { stopMic(true); return; }
+      clearFile();
+      startMic();
+    },
     quick: (el) => {
       stopTyping();
+      clearFile();
       setError(device, null);
       setInputValue(device, SAMPLES[el.dataset.sample].text);
       runCheck();
@@ -903,48 +1616,58 @@
     'close-sheet': closeSheet,
     'send-family': (el) => {
       if (el.classList.contains('is-sent')) return;
+      const f = familyById(el.dataset.id);
+      if (!f) return;
       el.classList.add('is-sent');
-      el.querySelector('.fr-send span').textContent = 'Đã gửi';
       el.querySelector('.fr-send use').setAttribute('href', '#i-check');
-      const name = el.dataset.name;
-      const rel = el.dataset.rel;
       toast({
         type: 'success',
-        title: `Đã gửi cảnh báo tới ${name} (${rel})${state.offline ? ' qua SMS' : ''}`,
+        title: `Đã gửi cảnh báo tới ${esc(f.name)} (${esc(f.rel)})${state.offline ? ' qua SMS' : ''}`,
         desc: `Kèm nội dung: “${esc(truncate(state.checkedText, 70))}”`
       });
       setTimeout(closeSheet, 900);
     },
-    'call-family': (el) => toast({
-      type: 'info',
-      title: `Đang gọi ${el.dataset.name}…`,
-      desc: state.offline ? 'Gọi qua sóng di động thường, không cần Internet.' : 'Cuộc gọi sẽ mở trong ứng dụng Điện thoại.',
-      iconId: 'i-phone'
-    }),
-    'add-family': () => {
-      if (state.familyEmpty) {
-        state.familyEmpty = false;
-        syncToggles();
-        toast({ type: 'success', title: 'Đã thêm 2 người thân từ danh bạ', desc: 'Minh Anh (Con gái) · Hoàng Nam (Con trai)', iconId: 'i-user-plus' });
-      } else {
-        toast({ type: 'info', title: 'Mở danh bạ để chọn người thân', desc: 'Tối đa 5 người thân tin cậy.', iconId: 'i-user-plus' });
-      }
+    'call-family': (el) => {
+      const f = familyById(el.dataset.id);
+      if (!f) return;
+      toast({
+        type: 'info',
+        title: `Đang gọi ${esc(f.name)} – ${formatPhone(f.phone)}`,
+        desc: state.offline ? 'Gọi qua sóng di động thường, không cần Internet.' : 'Cuộc gọi sẽ mở trong ứng dụng Điện thoại.',
+        iconId: 'i-phone'
+      });
     },
+    'add-contact': (el) => openContactForm(null, el.dataset.from),
+    'edit-contact': (el) => openContactForm(el.dataset.id, 'settings'),
+    'pick-rel': (el) => {
+      state.contactRel = el.dataset.rel;
+      setContactRel(device, state.contactRel);
+      $(device, 'relError').classList.remove('is-visible');
+    },
+    'delete-contact': deleteContact,
+
+    'toggle-background': () => {
+      state.settings.background = !state.settings.background;
+      store.set('lcs.settings', state.settings);
+      renderSettings(device, state.settings, state.family);
+      toast(state.settings.background
+        ? { type: 'success', title: 'Đã bật bảo vệ chạy ngầm', desc: 'Lá Chắn Số sẽ cảnh báo cả khi bạn không mở ứng dụng.', iconId: 'i-shield-check' }
+        : { type: 'info', title: 'Đã tắt bảo vệ chạy ngầm', desc: 'Bạn chỉ được bảo vệ khi đang mở ứng dụng.', iconId: 'i-shield' });
+    },
+    'toggle-option': (el) => {
+      const key = el.dataset.option;
+      state.settings[key] = !state.settings[key];
+      store.set('lcs.settings', state.settings);
+      renderSettings(device, state.settings, state.family);
+    },
+    'flush-queue': () => flushQueue(),
 
     'report-type': (el) => { state.reportType = el.dataset.type; selectReportType(device, state.reportType); },
     'toggle-forward': (el) => { state.forward = !state.forward; el.setAttribute('aria-checked', String(state.forward)); },
     'report-submit': submitReport,
     'report-reset': () => { resetReport(); ui.viewport.scrollTo({ top: 0, behavior: 'auto' }); },
 
-    flip: () => {
-      const flip = $(device, 'flip');
-      const on = !flip.classList.contains('is-flipped');
-      flip.classList.toggle('is-flipped', on);
-      if (on && !state.learned.has(state.lesson)) {
-        state.learned.add(state.lesson);
-        $(device, 'learnProgress').innerHTML = `${icon('i-star')}${2 + state.learned.size}/12 bài`;
-      }
-    },
+    flip: flipCard,
     'pick-lesson': (el) => {
       state.lesson = Number(el.dataset.index);
       renderLesson(device, state.lesson, false);
@@ -968,7 +1691,7 @@
     },
     'poster-save': () => {
       closeSheet();
-      toast({ type: 'success', title: 'Đã lưu ảnh vào Thư viện', desc: 'canh-bao-dien-luc-tam-hiep.png · 1080 × 1350', iconId: 'i-image' });
+      toast({ type: 'success', title: 'Đã lưu ảnh vào Thư viện', desc: 'canh-bao-dien-luc-tam-hiep.png – 1080 × 1350', iconId: 'i-image' });
     },
     'poster-share': () => toast({ type: 'info', title: 'Đã mở bảng chia sẻ', desc: 'Gửi vào nhóm khu phố, tổ dân phố.', iconId: 'i-share' })
   };
@@ -976,6 +1699,7 @@
   document.addEventListener('click', (e) => {
     const el = e.target.closest('[data-action]');
     if (!el || el.closest('.g-frame')) return;
+    if (el.disabled) return;
     const fn = ACTIONS[el.dataset.action];
     if (fn) fn(el, e);
   });
@@ -987,6 +1711,33 @@
   });
   ui.omniInput.addEventListener('keydown', (e) => {
     if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); runCheck(); }
+  });
+  ui.fileInput.addEventListener('change', () => {
+    const f = ui.fileInput.files && ui.fileInput.files[0];
+    if (f) chooseFile(f);
+    ui.fileInput.value = ''; // cho phép chọn lại cùng một tệp
+  });
+
+  /* Kéo thả tệp vào khung kiểm tra */
+  ui.omni.addEventListener('dragover', (e) => { e.preventDefault(); ui.omni.classList.add('is-drop'); });
+  ui.omni.addEventListener('dragleave', () => ui.omni.classList.remove('is-drop'));
+  ui.omni.addEventListener('drop', (e) => {
+    e.preventDefault();
+    ui.omni.classList.remove('is-drop');
+    const f = e.dataTransfer.files && e.dataTransfer.files[0];
+    if (f) chooseFile(f);
+  });
+
+  /* Form người thân */
+  ui.contactForm.addEventListener('submit', (e) => { e.preventDefault(); submitContact(); });
+  ui.contactName.addEventListener('input', () => { $(device, 'nameWrap').classList.remove('is-error'); $(device, 'nameError').classList.remove('is-visible'); });
+  ui.contactPhone.addEventListener('input', () => { $(device, 'phoneWrap').classList.remove('is-error'); $(device, 'phoneError').classList.remove('is-visible'); });
+
+  /* Thẻ lật: khi lật xong thì "hạ" lớp 3D để chữ sắc nét */
+  $(device, 'flipInner').addEventListener('transitionend', (e) => {
+    if (e.propertyName !== 'transform') return;
+    const flip = $(device, 'flip');
+    if (flip.classList.contains('is-flipped')) flip.classList.add('is-settled');
   });
 
   /* Biểu đồ: hover/chạm */
@@ -1017,7 +1768,7 @@
     }
     if (tag === 'textarea' || tag === 'input' || e.metaKey || e.ctrlKey || e.altKey) return;
     const k = e.key.toLowerCase();
-    if (/^[1-6]$/.test(k)) {
+    if (/^[1-7]$/.test(k)) {
       if (state.gallery) toggleGallery(false);
       go(SCREEN_ORDER[Number(k) - 1]);
     } else if (k === 'g') toggleGallery();
@@ -1025,7 +1776,10 @@
     else if (k === 'o') toggleOffline();
   });
 
-  /* ---------- 17. CO GIÃN KHUNG MÁY & ĐỒNG HỒ ---------- */
+  /* Mạng thật quay lại → gửi hàng đợi */
+  window.addEventListener('online', () => flushQueue({ silent: true }));
+
+  /* ---------- 20. CO GIÃN KHUNG MÁY & ĐỒNG HỒ ---------- */
   function fitDevice() {
     if (isMobile()) {
       deviceWrap.style.setProperty('--dscale', '1');
@@ -1045,13 +1799,17 @@
 
   window.addEventListener('beforeprint', () => { if (!state.gallery) toggleGallery(true); });
 
-  /* ---------- 18. KHỞI TẠO ---------- */
+  /* ---------- 21. KHỞI TẠO ---------- */
   function init() {
     renderResult(device, state.level, state.checkedText);
     renderLesson(device, 0, false);
     renderQuiz(device, 0, null, 0);
     renderChart(device);
+    renderFamilySheet(device, state.family);
+    renderSettings(device, state.settings, state.family);
+    renderServerStatus(device);
     ui.reportText.value = state.checkedText;
+    state.reportPrefill = state.checkedText;
     template = device.cloneNode(true);
 
     syncToggles();
@@ -1060,6 +1818,7 @@
     fitDevice();
     tickClock();
     setInterval(tickClock, 30000);
+    detectServer();
   }
 
   init();
