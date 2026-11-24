@@ -271,9 +271,9 @@
 
   /* Bản demo (không có máy chủ): danh sách cảnh báo & hàng chờ duyệt mẫu */
   const MOCK_WARNINGS = [
-    { key: '0123456789', approved: 12, pending: 2, lastAt: hoursAgo(2) },
-    { key: 'bit.ly/qua-tri-an-dn', approved: 5, pending: 1, lastAt: hoursAgo(5) },
-    { key: DEMO_FILE_RESULT.sha256, approved: 7, pending: 0, lastAt: hoursAgo(26) }
+    { key: '0123456789', approved: 12, lastAt: hoursAgo(2) },
+    { key: 'bit.ly/qua-tri-an-dn', approved: 5, lastAt: hoursAgo(5) },
+    { key: DEMO_FILE_RESULT.sha256, approved: 7, lastAt: hoursAgo(26) }
   ];
   const MOCK_PENDING = [
     { id: 'd1', code: 'DN-2411-0131', type: 'phone', target: '0857 219 446', created_at: hoursAgo(0.3),
@@ -502,16 +502,12 @@
 
   function renderCommunity(root, info) {
     const el = $(root, 'community');
-    const show = !!info && (info.approved > 0 || info.pending > 0);
+    const show = !!info && info.approved > 0;
     el.classList.toggle('is-visible', show);
     if (!show) return;
     el.dataset.level = info.approved >= 3 ? 'danger' : 'warning';
-    $(root, 'communityTitle').textContent = info.approved > 0
-      ? `${info.approved} báo cáo đã được kiểm duyệt`
-      : `${info.pending} báo cáo đang chờ kiểm duyệt`;
-    $(root, 'communityText').textContent = info.approved > 0
-      ? `Nội dung này có trong danh sách cảnh báo cộng đồng${info.pending ? `, thêm ${info.pending} báo cáo đang chờ duyệt` : ''}. Lần gần nhất: ${relTime(info.lastAt)}.`
-      : 'Chưa được xác nhận nhưng đã có người cảnh báo. Hãy thận trọng.';
+    $(root, 'communityTitle').textContent = `${info.approved} báo cáo đã được kiểm duyệt`;
+    $(root, 'communityText').textContent = `Nội dung này có trong danh sách cảnh báo cộng đồng. Lần gần nhất: ${relTime(info.lastAt)}.`;
   }
 
   function renderResult(root, level, text, reasons) {
@@ -1503,7 +1499,7 @@
         await fetchJSON(`/api/moderation/${encodeURIComponent(id)}`, { method: 'POST', json: { action: decision }, headers: { 'x-admin-token': modToken.get() } }, 6000);
       } else {
         demoPending = demoPending.filter((x) => x.id !== id);
-        if (decision === 'approve') MOCK_WARNINGS.push({ key: normalizeLoose(el.dataset.target), approved: 1, pending: 0, lastAt: new Date().toISOString() });
+        if (decision === 'approve') MOCK_WARNINGS.push({ key: normalizeLoose(el.dataset.target), approved: 1, lastAt: new Date().toISOString() });
       }
     } catch (e) {
       $$(item, 'button').forEach((b) => (b.disabled = false));
@@ -1560,7 +1556,8 @@
         await postReport(item);
         sent += 1;
       } catch (e) {
-        if (!(e.status && e.status < 500)) remaining.push(item); // lỗi mạng: giữ lại; lỗi dữ liệu: bỏ
+        // Lỗi mạng hoặc 429 (gửi quá nhanh): giữ lại để gửi sau. Lỗi dữ liệu khác (4xx): bỏ.
+        if (e.status === 429 || !(e.status && e.status < 500)) remaining.push(item);
       }
     }
     state.queue = remaining;
