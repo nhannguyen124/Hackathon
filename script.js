@@ -97,10 +97,22 @@
     result:    { code: '02_KetQua',    title: 'Kết quả & Đọc báo cáo',           tab: 'check' },
     report:    { code: '03_BaoCao',    title: 'Gửi báo cáo đa kênh & Máy chủ',   tab: 'report' },
     learn:     { code: '04_BaiHoc',    title: 'Bài học & Thi thử nhận diện',     tab: 'learn' },
-    volunteer: { code: '05_KiemDuyet', title: 'Kiểm duyệt & Danh sách cảnh báo', tab: 'volunteer' },
-    settings:  { code: '06_CaiDat',    title: 'Cài đặt',                         tab: null }
+    review:    { code: '05_KiemDuyet', title: 'Kiểm duyệt & Danh sách cảnh báo', tab: 'review' },
+    volunteer: { code: '06_TinhNguyen', title: 'Đội tình nguyện · Thống kê địa phương', tab: 'volunteer' },
+    auth:      { code: '07_DangNhap',  title: 'Đăng nhập & Đăng ký tài khoản',   tab: null },
+    settings:  { code: '08_CaiDat',    title: 'Cài đặt',                         tab: null }
   };
-  const SCREEN_ORDER = ['home', 'result', 'report', 'learn', 'volunteer', 'settings'];
+  const SCREEN_ORDER = ['home', 'result', 'report', 'learn', 'review', 'volunteer', 'auth', 'settings'];
+
+  const ROLE_LABEL = { admin: 'Quản trị viên', volunteer: 'Tình nguyện viên', user: 'Người dân', guest: 'Khách' };
+  const SESSION_KEY = 'lcs.session.v1';
+  const LOCAL_USERS_KEY = 'lcs.users.v1';
+  /* Tài khoản mẫu cho chế độ Demo (mở file trực tiếp, chưa chạy máy chủ). Khi chạy `npm start`, tài khoản nằm trong máy chủ. */
+  const LOCAL_SEED_USERS = [
+    { id: 1, username: 'admin', fullName: 'Quản trị viên Công an TP', role: 'admin', ward: 'TP. Biên Hòa', password: 'admin123' },
+    { id: 2, username: 'tinhnguyen', fullName: 'Nguyễn Minh Khoa (Đội tình nguyện)', role: 'volunteer', ward: 'P. Trảng Dai', password: '123456' },
+    { id: 3, username: 'nguoidan', fullName: 'Trần Thị Lan', role: 'user', ward: 'P. Tân Hiệp', password: '123456' }
+  ];
 
   const TYPE_META = {
     phone:   { label: 'Số điện thoại', icon: 'i-phone', cls: 't-phone', targetLabel: '3. Số điện thoại lừa đảo', placeholder: 'VD: 0916 882 341' },
@@ -373,6 +385,14 @@
     quizScore: 0,
     quizAnswered: false,
 
+    /* Tài khoản & phân quyền */
+    session: store.get(SESSION_KEY, null),
+    user: null,
+    authTab: 'login',
+    authBusy: false,
+    registerVolunteer: false,
+    publicWatchlist: null,
+
     /* Kiểm duyệt & Danh sách cảnh báo */
     volTab: 'review',
     reviewFilter: 'all',
@@ -400,6 +420,7 @@
     sampleCursor: 0,
     gallery: false
   };
+  if (state.session && state.session.user && state.session.token) state.user = state.session.user; else state.session = null;
   if (!Array.isArray(state.family)) state.family = DEFAULT_FAMILY.slice();
   if (!Array.isArray(state.reports) || !state.reports.length) state.reports = INITIAL_REPORTS.slice();
 
@@ -1020,17 +1041,61 @@
   }
 
   /* ---------- Render Kiểm duyệt, Danh sách cảnh báo & Thống kê ---------- */
+  /* Danh sách cảnh báo: quản trị viên tự gom từ toàn bộ báo cáo, người dùng khác nhận bản công khai từ máy chủ */
+  function getWatchlist(root = device, reports = state.reports) {
+    if (root === device && api.online && !state.offline && !isAdmin() && Array.isArray(state.publicWatchlist)) {
+      return state.publicWatchlist;
+    }
+    return buildWatchlistFromReports(reports);
+  }
+
+  function hotWards(wl) {
+    const map = new Map();
+    for (const it of wl) {
+      const ward = it.ward || 'Đồng Nai';
+      const g = map.get(ward) || { ward, count: 0, types: {} };
+      g.count += it.reportCount || 1;
+      g.types[it.type] = (g.types[it.type] || 0) + (it.reportCount || 1);
+      map.set(ward, g);
+    }
+    return Array.from(map.values()).sort((a, b) => b.count - a.count).slice(0, 4).map((g) => {
+      const topType = Object.entries(g.types).sort((a, b) => b[1] - a[1])[0][0];
+      return { ...g, topType };
+    });
+  }
+
+  function renderHotWards(root, wl) {
+    const list = $(root, 'hotList');
+    if (!list) return;
+    const hot = hotWards(wl);
+    list.innerHTML = hot.length
+      ? hot.map((h, i) => {
+          const m = TYPE_META[h.topType] || TYPE_META.phone;
+          return `
+            <li class="hot-item">
+              <span class="hot-rank">${i + 1}</span>
+              <span class="hot-body"><strong>${esc(h.ward)}</strong><small>Nhiều nhất: ${esc(m.label)}</small></span>
+              <span class="hot-count">${h.count} báo cáo</span>
+            </li>`;
+        }).join('')
+      : '<li class="rv-empty">Chưa có cảnh báo nào tại địa phương.</li>';
+  }
+
   function renderVolunteerAndWatchlist(root, reports = state.reports) {
-    const wl = buildWatchlistFromReports(reports);
+    const wl = getWatchlist(root, reports);
     const pendingCount = reports.filter((r) => r.status === 'pending').length;
     const totalReports = wl.reduce((sum, x) => sum + x.reportCount, 0) + 82; // cộng số liệu lịch sử trong tháng tại địa phương
 
     $(root, 'pendingBadge').textContent = pendingCount;
     $(root, 'watchlistBadge').textContent = wl.length;
     const dot = $(root, 'tabPendingDot');
-    if (dot) dot.hidden = pendingCount === 0;
+    if (dot) dot.hidden = pendingCount === 0 || !(root === device ? isAdmin() : root.dataset.role === 'admin');
 
-    $(root, 'homeWatchlistSummary').textContent = `Danh sách cảnh báo máy chủ: ${wl.length} nguồn nguy hiểm (${pendingCount} chờ duyệt)`;
+    const adminView = root === device ? isAdmin() : root.dataset.role === 'admin';
+    $(root, 'homeWatchlistSummary').textContent = adminView
+      ? `Danh sách cảnh báo máy chủ: ${wl.length} nguồn nguy hiểm (${pendingCount} chờ duyệt)`
+      : `Danh sách cảnh báo máy chủ: ${wl.length} nguồn nguy hiểm đang theo dõi`;
+    renderHotWards(root, wl);
     $(root, 'kpiTotal').textContent = totalReports;
     $(root, 'kpiWatchCount').textContent = wl.length;
 
@@ -1059,7 +1124,7 @@
               <div class="rv-actions">
                 <button type="button" class="mini-act mini-act-primary" data-action="open-report-detail" data-id="${r.id}">${icon('i-eye')}Đọc &amp; Duyệt</button>
                 <button type="button" class="mini-act" data-action="speak-report-id" data-id="${r.id}">${icon('i-volume')}Đọc to</button>
-                ${r.status === 'pending' ? `<button type="button" class="mini-act mini-act-ok" data-action="quick-approve" data-id="${r.id}">${icon('i-check')}Duyệt</button>` : ''}
+                ${r.status === 'pending' ? `<button type="button" class="mini-act mini-act-ok admin-only" data-action="quick-approve" data-id="${r.id}">${icon('i-check')}Duyệt</button>` : ''}
               </div>
             </article>`;
         }).join('')
@@ -1186,7 +1251,7 @@
       </div>`).join('');
 
     const modBox = $(root, 'detailModeration');
-    modBox.hidden = !officerMode || !report;
+    modBox.hidden = !officerMode || !report || !(root === device ? isAdmin() : root.dataset.role === 'admin');
     if (officerMode && report && $(root, 'reviewerNote')) {
       $(root, 'reviewerNote').value = report.reviewerNote || '';
     }
@@ -1275,7 +1340,7 @@
   /* ---------- 8. ĐIỀU HƯỚNG ---------- */
   function go(key) {
     if (!SCREENS[key]) return;
-    if (state.senior && key === 'volunteer') key = 'home';
+    if (state.senior && (key === 'volunteer' || key === 'review')) key = 'home';
 
     stopMic(false);
     stopReportMic();
@@ -1285,12 +1350,18 @@
     if (key === 'report') {
       renderReportFormState(device);
     }
-    if (key === 'volunteer') {
+    if (key === 'review' || key === 'volunteer') {
       renderVolunteerAndWatchlist(device);
-      syncReportsFromServer();
+      syncServerData();
+    }
+    if (key === 'auth') {
+      if (state.screen !== 'auth' && state.screen !== 'settings') state.prevScreen = state.screen;
+      setAuthTab(device, state.authTab);
+      setAuthError(device, 'login', null);
+      setAuthError(device, 'register', null);
     }
     if (key === 'settings') {
-      if (state.screen !== 'settings') state.prevScreen = state.screen;
+      if (state.screen !== 'settings' && state.screen !== 'auth') state.prevScreen = state.screen;
       renderSettings(device, state.settings, state.family);
       renderServerStatus(device);
     }
@@ -1915,6 +1986,7 @@
   function openReportDetailById(id, officerMode = true) {
     const r = state.reports.find((x) => Number(x.id) === Number(id));
     if (!r) return;
+    officerMode = officerMode && isAdmin();
     state.detailTargetReportId = r.id;
     state.detailIsOfficer = officerMode;
     state.detailReadText = populateReportDetailSheet(device, { report: r, officerMode });
@@ -1922,9 +1994,10 @@
   }
 
   function openWatchlistDetailByKey(key, officerMode = false) {
-    const wl = buildWatchlistFromReports(state.reports);
+    const wl = getWatchlist();
     const item = wl.find((x) => x.key === key);
     if (!item) return;
+    officerMode = officerMode && isAdmin();
     const primaryReport = item.reports && item.reports[0] ? item.reports[0] : null;
     state.detailTargetReportId = primaryReport ? primaryReport.id : null;
     state.detailIsOfficer = officerMode;
@@ -1933,22 +2006,36 @@
   }
 
   async function applyReviewDecision(id, status, reviewerNote = '') {
+    if (!isAdmin()) {
+      toast({ type: 'error', title: 'Chỉ Quản trị viên mới được duyệt', desc: 'Hãy đăng nhập bằng tài khoản Quản trị viên.', iconId: 'i-lock' });
+      return;
+    }
     const idx = state.reports.findIndex((x) => Number(x.id) === Number(id));
     if (idx < 0) return;
 
-    const note = reviewerNote.trim() || (status === 'verified' ? 'Cán bộ đã xác minh và đưa vào Danh sách cảnh báo máy chủ.' : 'Đã kiểm tra, không đủ dấu hiệu nguy hiểm.');
-    state.reports[idx] = { ...state.reports[idx], status, reviewerNote: note };
-    persistLocalReports();
+    const note = reviewerNote.trim() || (status === 'verified' ? 'Quản trị viên đã xác minh và đưa vào Danh sách cảnh báo máy chủ.' : 'Đã kiểm tra, không đủ dấu hiệu nguy hiểm.');
+    const before = state.reports[idx];
 
     if (api.online && !state.offline) {
       try {
         const res = await fetchJSON(`/api/reports/${id}`, {
           method: 'PATCH',
+          headers: authHeaders(),
           json: { status, reviewerNote: note }
         }, 6000);
-        if (res && res.report) state.reports[idx] = res.report;
-      } catch { /* giữ kết quả cập nhật cục bộ */ }
+        state.reports[idx] = res && res.report ? res.report : { ...before, status, reviewerNote: note };
+      } catch (e) {
+        if (e.status === 401 || e.status === 403) {
+          toast({ type: 'error', title: e.message, desc: 'Phiên đăng nhập có thể đã hết hạn. Hãy đăng nhập lại.', iconId: 'i-lock' });
+          if (e.status === 401) await signOut({ silent: true });
+          return;
+        }
+        state.reports[idx] = { ...before, status, reviewerNote: note }; // giữ kết quả cục bộ khi mất kết nối
+      }
+    } else {
+      state.reports[idx] = { ...before, status, reviewerNote: note };
     }
+    persistLocalReports();
 
     renderVolunteerAndWatchlist(device);
     if (state.sheetOpen && ui.sheet.dataset.mode === 'report-detail') {
@@ -1963,14 +2050,33 @@
 
   async function syncReportsFromServer() {
     if (!api.online || state.offline) return;
+    if (!isAdmin()) return syncPublicWatchlist();
     try {
-      const data = await fetchJSON('/api/reports?limit=80', {}, 4000);
+      const data = await fetchJSON('/api/reports?limit=80', { headers: authHeaders() }, 4000);
       if (data && Array.isArray(data.items) && data.items.length) {
         state.reports = data.items;
         persistLocalReports();
         renderVolunteerAndWatchlist(device);
       }
+    } catch (e) {
+      if (e.status === 401) await signOut({ silent: true });
+      /* còn lại: dùng dữ liệu trên máy */
+    }
+  }
+
+  async function syncPublicWatchlist() {
+    if (!api.online || state.offline) return;
+    try {
+      const data = await fetchJSON('/api/watchlist', {}, 4000);
+      if (data && Array.isArray(data.items)) {
+        state.publicWatchlist = data.items;
+        renderVolunteerAndWatchlist(device);
+      }
     } catch { /* dùng dữ liệu trên máy */ }
+  }
+
+  function syncServerData() {
+    return isAdmin() ? syncReportsFromServer() : syncPublicWatchlist();
   }
 
   let flushing = false;
@@ -1995,7 +2101,7 @@
     flushing = false;
     renderServerStatus(device);
     if (sent) {
-      syncReportsFromServer();
+      syncServerData();
       toast({ type: 'success', title: `Đã đồng bộ ${sent} báo cáo lên máy chủ`, iconId: 'i-server' });
     }
   }
@@ -2015,7 +2121,243 @@
     renderServerStatus(device);
     if (api.online) {
       await flushQueue({ silent: true });
-      await syncReportsFromServer();
+      await restoreSession();
+      await syncServerData();
+    }
+  }
+
+
+  /* ---------- 12b. TÀI KHOẢN: ĐĂNG KÝ · ĐĂNG NHẬP · PHÂN QUYỀN ---------- */
+  const isAdmin = () => !!state.user && state.user.role === 'admin';
+  const roleOf = (user) => (user ? user.role : 'guest');
+
+  const ROLE_PERMS = {
+    admin: [
+      [true, 'Xem hàng chờ và duyệt / bỏ qua báo cáo'],
+      [true, 'Đưa nguồn nguy hiểm vào Danh sách cảnh báo'],
+      [true, 'Đọc to báo cáo, ghi chú kiểm duyệt'],
+      [true, 'Xem thống kê Đội tình nguyện']
+    ],
+    volunteer: [
+      [true, 'Xem thống kê lừa đảo mới tại địa phương'],
+      [true, 'Xuất ảnh tuyên truyền cho khu phố'],
+      [true, 'Gửi báo cáo, xem Danh sách cảnh báo'],
+      [false, 'Duyệt báo cáo (chỉ Quản trị viên)']
+    ],
+    user: [
+      [true, 'Kiểm tra tin nhắn, cuộc gọi, trang web, tệp'],
+      [true, 'Gửi báo cáo tới người thân, cán bộ, máy chủ'],
+      [true, 'Xem Danh sách cảnh báo công khai'],
+      [false, 'Duyệt báo cáo (chỉ Quản trị viên)']
+    ]
+  };
+
+  const authHeaders = () => (state.session && state.session.token && state.session.token !== 'local'
+    ? { Authorization: `Bearer ${state.session.token}` } : {});
+
+  async function sha256Text(text) {
+    if (window.crypto && crypto.subtle) {
+      const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text));
+      return Array.from(new Uint8Array(buf), (b) => b.toString(16).padStart(2, '0')).join('');
+    }
+    let h = 5381;
+    for (let i = 0; i < text.length; i++) h = ((h << 5) + h + text.charCodeAt(i)) >>> 0;
+    return 'x' + h.toString(16);
+  }
+
+  const publicOf = (u) => ({ id: u.id, username: u.username, fullName: u.fullName, role: u.role, ward: u.ward || '' });
+
+  /* Chế độ Demo trên trình duyệt (không có máy chủ) */
+  async function localAuth(kind, { username, password, fullName, ward, volunteer }) {
+    const fail = (message, status) => Object.assign(new Error(message), { status });
+    const registered = store.get(LOCAL_USERS_KEY, []);
+    const name = String(username || '').trim().toLowerCase();
+    if (kind === 'login') {
+      const seed = LOCAL_SEED_USERS.find((u) => u.username === name);
+      if (seed && seed.password === password) return { user: publicOf(seed), token: 'local' };
+      const reg = registered.find((u) => u.username === name);
+      if (reg && reg.hash === await sha256Text(`lcs:${name}:${password}`)) return { user: publicOf(reg), token: 'local' };
+      throw fail('Sai tên đăng nhập hoặc mật khẩu.', 401);
+    }
+    if (LOCAL_SEED_USERS.some((u) => u.username === name) || registered.some((u) => u.username === name)) {
+      throw fail('Tên đăng nhập này đã có người dùng. Hãy chọn tên khác hoặc đăng nhập.', 409);
+    }
+    const user = { id: 100 + registered.length, username: name, fullName, role: volunteer ? 'volunteer' : 'user', ward: ward || '' };
+    store.set(LOCAL_USERS_KEY, [...registered, { ...user, hash: await sha256Text(`lcs:${name}:${password}`) }]);
+    return { user, token: 'local' };
+  }
+
+  async function authRequest(kind, payload) {
+    if (api.online && !state.offline) {
+      const res = await fetchJSON(`/api/auth/${kind}`, { method: 'POST', json: payload }, 9000);
+      return { user: res.user, token: res.token };
+    }
+    return localAuth(kind, payload);
+  }
+
+  function setAuthTab(root, tab) {
+    $$(root, '[data-action="auth-tab"]').forEach((b) => {
+      const on = b.dataset.atab === tab;
+      b.classList.toggle('is-active', on);
+      b.setAttribute('aria-selected', String(on));
+    });
+    $$(root, '.auth-form').forEach((f) => f.classList.toggle('is-active', f.dataset.apane === tab));
+  }
+
+  function setAuthError(root, form, message) {
+    const box = $(root, form === 'login' ? 'loginError' : 'registerError');
+    if (!box) return;
+    box.classList.toggle('is-visible', !!message);
+    $(root, form === 'login' ? 'loginErrorText' : 'registerErrorText').textContent = message || '';
+  }
+
+  function applyAuthUI(root, user = state.user) {
+    const role = roleOf(user);
+    root.dataset.role = role;
+    const label = ROLE_LABEL[role];
+    const ini = user ? initials(user.fullName) : '';
+
+    const chip = $(root, 'roleChipReview');
+    if (chip) { chip.textContent = label; chip.dataset.role = role; }
+    const topIni = $(root, 'accountInitials');
+    if (topIni) topIni.textContent = ini;
+    const btn = $(root, 'accountBtn');
+    if (btn) btn.setAttribute('aria-label', user ? `Tài khoản: ${user.fullName} (${label})` : 'Đăng nhập / Đăng ký');
+
+    $(root, 'accountAvatar').textContent = user ? ini : '?';
+    $(root, 'accountName').textContent = user ? user.fullName : 'Chưa đăng nhập';
+    $(root, 'accountSub').textContent = user ? `${label}${user.ward ? ' · ' + user.ward : ''}` : 'Đăng nhập hoặc đăng ký tài khoản';
+
+    $(root, 'authTitle').textContent = user ? 'Tài khoản của bạn' : 'Tài khoản';
+    $(root, 'authSub').textContent = user ? 'Quản lý phiên đăng nhập & quyền hạn' : 'Đăng nhập hoặc tạo tài khoản mới';
+    if (user) {
+      $(root, 'profileAvatar').textContent = ini;
+      $(root, 'profileName').textContent = user.fullName;
+      $(root, 'profileUser').textContent = `@${user.username}${user.ward ? ' · ' + user.ward : ''}`;
+      const pr = $(root, 'profileRole');
+      pr.textContent = label;
+      pr.dataset.role = role;
+      $(root, 'permList').innerHTML = (ROLE_PERMS[role] || []).map(([ok, text]) =>
+        `<li class="${ok ? '' : 'is-no'}">${icon(ok ? 'i-check' : 'i-ban')}<span>${esc(text)}</span></li>`).join('');
+    }
+
+    const lockText = $(root, 'lockText');
+    if (lockText) {
+      lockText.textContent = user
+        ? `Tài khoản “${user.fullName}” là ${label.toLowerCase()} nên chưa có quyền duyệt báo cáo. Hãy đăng nhập bằng tài khoản Quản trị viên.`
+        : 'Chỉ tài khoản Quản trị viên mới được xem hàng chờ và duyệt báo cáo vào Danh sách cảnh báo. Bạn vẫn xem được Danh sách cảnh báo công khai.';
+      $(root, 'lockLoginLabel').textContent = user ? 'Đổi sang tài khoản Quản trị viên' : 'Đăng nhập Quản trị viên';
+    }
+  }
+
+  function afterAuthChange() {
+    applyAuthUI(device);
+    renderVolunteerAndWatchlist(device);
+    if (state.sheetOpen) closeSheet();
+  }
+
+  function startSession(res, { greeting }) {
+    state.user = res.user;
+    state.session = { user: res.user, token: res.token };
+    store.set(SESSION_KEY, state.session);
+    afterAuthChange();
+    toast({ type: 'success', title: greeting, desc: `${ROLE_LABEL[res.user.role]} · ${res.user.fullName}`, iconId: 'i-check' });
+    if (res.user.role === 'admin') { state.volTab = 'review'; setVolTab(device, 'review'); }
+    syncServerData();
+    const back = state.prevScreen && !['auth', 'settings'].includes(state.prevScreen) ? state.prevScreen : 'home';
+    const target = back === 'review' && res.user.role !== 'admin' ? (res.user.role === 'volunteer' ? 'volunteer' : 'home') : back;
+    setTimeout(() => go(target), 250);
+  }
+
+  function formFail(form, e) {
+    const msg = e && e.status ? e.message : 'Không kết nối được máy chủ. Hãy kiểm tra mạng rồi thử lại.';
+    setAuthError(device, form, msg);
+  }
+
+  async function submitLogin() {
+    if (state.authBusy) return;
+    const username = $(device, 'loginUser').value.trim();
+    const password = $(device, 'loginPass').value;
+    setAuthError(device, 'login', null);
+    if (!username || !password) { setAuthError(device, 'login', 'Hãy nhập tên đăng nhập và mật khẩu.'); return; }
+    state.authBusy = true;
+    $(device, 'loginBtn').classList.add('is-loading');
+    try {
+      const res = await authRequest('login', { username, password });
+      $(device, 'loginPass').value = '';
+      startSession(res, { greeting: 'Đăng nhập thành công' });
+    } catch (e) {
+      formFail('login', e);
+    } finally {
+      state.authBusy = false;
+      $(device, 'loginBtn').classList.remove('is-loading');
+    }
+  }
+
+  async function submitRegister() {
+    if (state.authBusy) return;
+    const fullName = $(device, 'regName').value.trim();
+    const username = $(device, 'regUser').value.trim().toLowerCase();
+    const ward = $(device, 'regWard').value.trim();
+    const password = $(device, 'regPass').value;
+    const password2 = $(device, 'regPass2').value;
+    setAuthError(device, 'register', null);
+    if (fullName.length < 2) return setAuthError(device, 'register', 'Hãy nhập họ và tên của bạn.');
+    if (!/^[a-z0-9._]{3,30}$/.test(username)) return setAuthError(device, 'register', 'Tên đăng nhập / số điện thoại gồm 3–30 ký tự: chữ thường không dấu, số, dấu chấm hoặc gạch dưới.');
+    if (password.length < 6) return setAuthError(device, 'register', 'Mật khẩu cần có ít nhất 6 ký tự.');
+    if (password !== password2) return setAuthError(device, 'register', 'Hai lần nhập mật khẩu chưa giống nhau.');
+    state.authBusy = true;
+    $(device, 'registerBtn').classList.add('is-loading');
+    try {
+      const res = await authRequest('register', { username, fullName, ward, password, volunteer: state.registerVolunteer });
+      ['regName', 'regUser', 'regWard', 'regPass', 'regPass2'].forEach((r) => { $(device, r).value = ''; });
+      startSession(res, { greeting: 'Tạo tài khoản thành công' });
+    } catch (e) {
+      formFail('register', e);
+    } finally {
+      state.authBusy = false;
+      $(device, 'registerBtn').classList.remove('is-loading');
+    }
+  }
+
+  async function signOut({ silent = false } = {}) {
+    const token = state.session && state.session.token;
+    if (token && token !== 'local' && api.online) {
+      try { await fetchJSON('/api/auth/logout', { method: 'POST', headers: authHeaders() }, 4000); } catch { /* bỏ qua */ }
+    }
+    state.user = null;
+    state.session = null;
+    state.publicWatchlist = null;
+    store.set(SESSION_KEY, null);
+    if (api.online) {
+      state.reports = INITIAL_REPORTS.slice(); // không giữ lại hàng chờ kiểm duyệt của máy chủ sau khi thoát
+      persistLocalReports();
+    }
+    afterAuthChange();
+    if (!silent) toast({ type: 'info', title: 'Đã đăng xuất', iconId: 'i-log-out' });
+    if (['review', 'volunteer'].includes(state.screen) || state.screen === 'auth') {
+      if (state.screen === 'auth') { state.authTab = 'login'; setAuthTab(device, 'login'); }
+      if (state.screen === 'review') state.volTab = 'review';
+    }
+    if (api.online) syncPublicWatchlist();
+  }
+
+  /* Khôi phục phiên đăng nhập sau khi tải lại trang */
+  async function restoreSession() {
+    if (!state.session) return;
+    if (state.session.token === 'local') {
+      if (api.online) await signOut({ silent: true }); // phiên demo không dùng được với máy chủ thật
+      return;
+    }
+    if (!api.online) return;
+    try {
+      const res = await fetchJSON('/api/auth/me', { headers: authHeaders() }, 4000);
+      state.user = res.user;
+      state.session = { ...state.session, user: res.user };
+      store.set(SESSION_KEY, state.session);
+      applyAuthUI(device);
+    } catch (e) {
+      if (e.status === 401) await signOut({ silent: true });
     }
   }
 
@@ -2102,7 +2444,7 @@
         state.reportType = 'phone';
       }
       renderReportFormState(device);
-      if (state.screen === 'volunteer') go('home');
+      if (state.screen === 'volunteer' || state.screen === 'review') go('home');
     }
     syncToggles();
     toast(state.senior
@@ -2168,19 +2510,27 @@
       setup: (r) => { setLearnTab(r, 'lesson'); renderLesson(r, 0, true); } },
     { code: '05_BaiHoc · Thi thử', name: 'Thi thử nhận diện (đã gộp vào trang Bài học)', screen: 'learn',
       setup: (r) => { setLearnTab(r, 'quiz'); renderQuiz(r, 0, 'scam', 20); } },
-    { code: '06_KiemDuyet · Danh sách', name: 'Cán bộ kiểm tra & kiểm duyệt báo cáo mới', screen: 'volunteer',
+    { code: '05_KiemDuyet · Quản trị', name: 'Quản trị viên kiểm tra & duyệt báo cáo mới', screen: 'review',
       setup: (r) => { renderVolunteerAndWatchlist(r, INITIAL_REPORTS); setVolTab(r, 'review'); } },
-    { code: '06_KiemDuyet · Đọc báo cáo', name: 'Đọc toàn văn & Nghe giọng đọc báo cáo khi kiểm duyệt', screen: 'volunteer',
+    { code: '05_KiemDuyet · Bị khoá', name: 'Khách / người dân thường: chỉ Quản trị viên mới được duyệt', screen: 'review',
+      setup: (r) => { applyAuthUI(r, null); renderVolunteerAndWatchlist(r, INITIAL_REPORTS); setVolTab(r, 'review'); } },
+    { code: '05_KiemDuyet · Đọc báo cáo', name: 'Đọc toàn văn & Nghe giọng đọc báo cáo khi kiểm duyệt', screen: 'review',
       setup: (r) => {
         renderVolunteerAndWatchlist(r, INITIAL_REPORTS);
         populateReportDetailSheet(r, { report: INITIAL_REPORTS[4], officerMode: true });
         openStaticSheet(r, 'report-detail');
       } },
-    { code: '06_CanhBao · Máy chủ', name: 'Danh sách cảnh báo tổng hợp trên máy chủ', screen: 'volunteer',
+    { code: '05_CanhBao · Máy chủ', name: 'Danh sách cảnh báo tổng hợp trên máy chủ (công khai)', screen: 'review',
       setup: (r) => { renderVolunteerAndWatchlist(r, INITIAL_REPORTS); setVolTab(r, 'watchlist'); } },
-    { code: '06_ThongKe · Địa phương', name: 'Thống kê kiểu lừa đảo & Xuất ảnh tuyên truyền', screen: 'volunteer',
-      setup: (r) => { renderVolunteerAndWatchlist(r, INITIAL_REPORTS); setVolTab(r, 'stats'); } },
-    { code: '07_CaiDat', name: 'Cài đặt chế độ sử dụng, giọng đọc & người thân', screen: 'settings' }
+    { code: '06_TinhNguyen · Thống kê', name: 'Đội tình nguyện: thống kê lừa đảo mới & xuất ảnh tuyên truyền', screen: 'volunteer',
+      setup: (r) => { applyAuthUI(r, null); renderVolunteerAndWatchlist(r, INITIAL_REPORTS); } },
+    { code: '07_DangNhap · Đăng nhập', name: 'Đăng nhập (kèm tài khoản dùng thử)', screen: 'auth',
+      setup: (r) => { applyAuthUI(r, null); setAuthTab(r, 'login'); } },
+    { code: '07_DangKy · Đăng ký', name: 'Đăng ký tài khoản người dân / tình nguyện viên', screen: 'auth',
+      setup: (r) => { applyAuthUI(r, null); setAuthTab(r, 'register'); } },
+    { code: '07_TaiKhoan · Quản trị', name: 'Hồ sơ Quản trị viên & quyền hạn', screen: 'auth',
+      setup: (r) => applyAuthUI(r, { username: 'admin', fullName: 'Quản trị viên Công an TP', role: 'admin', ward: 'TP. Biên Hòa' }) },
+    { code: '08_CaiDat', name: 'Cài đặt chế độ sử dụng, giọng đọc & người thân', screen: 'settings' }
   ];
 
   function openStaticSheet(root, mode) {
@@ -2202,6 +2552,7 @@
       clone.classList.toggle('is-senior', state.senior);
       clone.classList.toggle('is-offline', state.offline);
       $(clone, 'clock').textContent = '9:41';
+      applyAuthUI(clone, { username: 'admin', fullName: 'Quản trị viên Công an TP', role: 'admin', ward: 'TP. Biên Hòa' });
       renderFamilySheet(clone, DEFAULT_FAMILY);
       renderSettings(clone, DEFAULT_SETTINGS, DEFAULT_FAMILY);
       renderServerStatus(clone);
@@ -2245,8 +2596,11 @@
   const familyById = (id) => state.family.find((f) => f.id === id);
 
   const ACTIONS = {
-    go: (el) => go(el.dataset.target),
-    back: () => go(state.prevScreen && state.prevScreen !== 'settings' ? state.prevScreen : 'home'),
+    go: (el) => {
+      if (el.dataset.authTab) state.authTab = el.dataset.authTab;
+      go(el.dataset.target);
+    },
+    back: () => go(state.prevScreen && state.prevScreen !== 'settings' && state.prevScreen !== 'auth' ? state.prevScreen : 'home'),
     'toggle-senior': toggleSenior,
     'toggle-offline': toggleOffline,
     'toggle-empty': () => {
@@ -2267,9 +2621,13 @@
     'edge-review': () => {
       if (state.gallery) toggleGallery(false);
       if (state.senior) { state.senior = false; syncToggles(); }
-      state.volTab = 'review';
-      setVolTab(device, 'review');
-      go('volunteer');
+      state.volTab = isAdmin() ? 'review' : 'watchlist';
+      setVolTab(device, state.volTab);
+      go('review');
+      if (!isAdmin()) {
+        toast({ type: 'info', title: 'Kiểm duyệt chỉ dành cho Quản trị viên', desc: 'Đăng nhập admin / admin123 (tài khoản dùng thử) để duyệt.', iconId: 'i-lock' });
+        return;
+      }
       const target = state.reports.find((r) => r.status === 'pending') || state.reports[0];
       if (target) setTimeout(() => openReportDetailById(target.id, true), 220);
     },
@@ -2326,7 +2684,7 @@
     'open-watchlist': () => {
       state.volTab = 'watchlist';
       setVolTab(device, 'watchlist');
-      go('volunteer');
+      go('review');
     },
 
     /* Kết quả & Đọc báo cáo */
@@ -2426,11 +2784,11 @@
     'report-submit': submitReport,
     'report-reset': () => { resetReport(); ui.viewport.scrollTo({ top: 0, behavior: 'auto' }); },
     'view-in-moderation': () => {
-      state.volTab = 'review';
+      state.volTab = isAdmin() ? 'review' : 'watchlist';
       state.reviewFilter = 'all';
-      setVolTab(device, 'review');
-      go('volunteer');
-      if (state.lastCreatedReportId) {
+      setVolTab(device, state.volTab);
+      go('review');
+      if (state.lastCreatedReportId && isAdmin()) {
         setTimeout(() => openReportDetailById(state.lastCreatedReportId, true), 260);
       }
     },
@@ -2471,6 +2829,30 @@
       setVolTab(device, state.volTab);
       ui.viewport.scrollTo({ top: 0, behavior: 'auto' });
     },
+    'auth-tab': (el) => {
+      state.authTab = el.dataset.atab;
+      setAuthTab(device, state.authTab);
+    },
+    'toggle-pw': (el) => {
+      const input = el.parentElement.querySelector('input');
+      if (!input) return;
+      input.type = input.type === 'password' ? 'text' : 'password';
+      el.querySelector('use').setAttribute('href', input.type === 'password' ? '#i-eye' : '#i-eye-off');
+    },
+    'toggle-volunteer': (el) => {
+      state.registerVolunteer = !state.registerVolunteer;
+      el.setAttribute('aria-checked', String(state.registerVolunteer));
+    },
+    'login-submit': (_el, e) => { if (e) e.preventDefault(); submitLogin(); },
+    'register-submit': (_el, e) => { if (e) e.preventDefault(); submitRegister(); },
+    'auth-demo': (el) => {
+      const u = LOCAL_SEED_USERS.find((x) => x.username === el.dataset.user);
+      if (!u) return;
+      $(device, 'loginUser').value = u.username;
+      $(device, 'loginPass').value = u.password;
+      submitLogin();
+    },
+    logout: () => signOut(),
     'filter-review': (el) => {
       state.reviewFilter = el.dataset.filter;
       renderVolunteerAndWatchlist(device);
@@ -2500,7 +2882,7 @@
     },
     'open-watchlist-detail': (el) => openWatchlistDetailByKey(el.dataset.key, false),
     'test-watchlist-item': (el) => {
-      const wl = buildWatchlistFromReports(state.reports);
+      const wl = getWatchlist();
       const item = wl.find((x) => x.key === el.dataset.key);
       if (!item) return;
       go('home');
@@ -2576,6 +2958,10 @@
     if (f && !state.senior) chooseFile(f);
   });
 
+  /* Form đăng nhập / đăng ký (Enter để gửi) */
+  $(device, 'loginForm').addEventListener('submit', (e) => { e.preventDefault(); submitLogin(); });
+  $(device, 'registerForm').addEventListener('submit', (e) => { e.preventDefault(); submitRegister(); });
+
   /* Form người thân */
   ui.contactForm.addEventListener('submit', (e) => { e.preventDefault(); submitContact(); });
   ui.contactName.addEventListener('input', () => { $(device, 'nameWrap').classList.remove('is-error'); $(device, 'nameError').classList.remove('is-visible'); });
@@ -2616,7 +3002,7 @@
     }
     if (tag === 'textarea' || tag === 'input' || e.metaKey || e.ctrlKey || e.altKey) return;
     const k = e.key.toLowerCase();
-    if (/^[1-6]$/.test(k)) {
+    if (/^[1-8]$/.test(k)) {
       if (state.gallery) toggleGallery(false);
       go(SCREEN_ORDER[Number(k) - 1]);
     } else if (k === 'g') toggleGallery();
@@ -2657,6 +3043,7 @@
     renderFamilySheet(device, state.family);
     renderSettings(device, state.settings, state.family);
     renderServerStatus(device);
+    applyAuthUI(device);
 
     template = device.cloneNode(true);
 
