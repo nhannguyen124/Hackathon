@@ -534,7 +534,7 @@
     }
     if (type === 'web') {
       const cand = src || ((body.match(/(?:https?:\/\/|www\.|bit\.ly\/|[a-z0-9-]+\.(?:com|vn|net|top|xyz|info|link|online|site|org)\b)[^\s"<>]*/i) || [])[0] || '');
-      return cand.trim().toLowerCase().replace(/^https?:\/\//, '').replace(/^www\./, '').replace(/\/+$/, '') || body.slice(0, 50).toLowerCase();
+      return cand.trim().replace(/[.,;:!?)]+$/, '').toLowerCase().replace(/^https?:\/\//, '').replace(/^www\./, '').replace(/\/+$/, '') || body.slice(0, 50).toLowerCase();
     }
     if (type === 'bank') {
       const d = src.replace(/[\s.\-]/g, '');
@@ -2363,6 +2363,10 @@
         title: `Đã gửi báo cáo tới ${esc(f.name)} (${esc(f.rel)})${state.offline ? ' qua SMS' : ''}`,
         desc: `Nội dung: “${esc(truncate(state.checkedText, 64))}”`
       });
+      if (window.matchMedia('(pointer: coarse)').matches) {
+        const msg = encodeURIComponent(`[Lá Chắn Số] Nhờ kiểm tra giúp nội dung nghi ngờ: ${truncate(state.checkedText, 140)}`);
+        window.location.href = `sms:${f.phone}?body=${msg}`;
+      }
       if (state.sheetOpen) setTimeout(closeSheet, 800);
     },
     'call-family': (el) => {
@@ -2374,6 +2378,9 @@
         desc: 'Kết nối trực tiếp qua sóng di động.',
         iconId: 'i-phone'
       });
+      if (window.matchMedia('(pointer: coarse)').matches) {
+        window.location.href = `tel:${f.phone}`;
+      }
     },
     'add-contact': (el) => openContactForm(null, el.dataset.from),
     'edit-contact': (el) => openContactForm(el.dataset.id, 'settings'),

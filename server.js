@@ -219,7 +219,7 @@ function normalizeTarget(type, rawTarget, content, fileHash, fileName) {
   }
   if (type === 'web') {
     const candidate = src || ((body.match(/(?:https?:\/\/|www\.|bit\.ly\/|[a-z0-9-]+\.(?:com|vn|net|top|xyz|info|link|online|site|org)\b)[^\s"<>]*/i) || [])[0] || '');
-    return candidate.trim().toLowerCase().replace(/^https?:\/\//, '').replace(/^www\./, '').replace(/\/+$/, '') || body.slice(0, 60).toLowerCase();
+    return candidate.trim().replace(/[.,;:!?)]+$/, '').toLowerCase().replace(/^https?:\/\//, '').replace(/^www\./, '').replace(/\/+$/, '') || body.slice(0, 60).toLowerCase();
   }
   if (type === 'bank') {
     const digits = src.replace(/[\s.\-]/g, '');
@@ -765,11 +765,12 @@ async function handleScanPoll(req, res, id) {
 function validateReport(body) {
   if (!body || typeof body !== 'object') return 'Dữ liệu báo cáo không hợp lệ.';
   if (!TYPE_MAP[body.type]) return 'Hãy chọn loại báo cáo: số điện thoại, trang web, mã file độc, số tài khoản hoặc tin nhắn.';
-  const hasTarget = typeof body.targetValue === 'string' && body.targetValue.trim().length > 0;
+  const rawTarget = body.targetValue ?? body.target;
+  const hasTarget = typeof rawTarget === 'string' && rawTarget.trim().length > 0;
   const hasContent = typeof body.content === 'string' && body.content.trim().length > 0;
   if (!hasTarget && !hasContent) return 'Hãy nhập số điện thoại, trang web, mã file độc hoặc nội dung cần báo cáo.';
   if (body.content && String(body.content).length > 2000) return 'Nội dung báo cáo dài quá 2.000 ký tự. Hãy rút gọn lại.';
-  if (body.targetValue && String(body.targetValue).length > 300) return 'Thông tin định danh quá dài.';
+  if (rawTarget && String(rawTarget).length > 300) return 'Thông tin định danh quá dài.';
   if (body.riskLevel != null && !RISK_LEVELS.includes(body.riskLevel)) return 'Mức rủi ro không hợp lệ.';
   if (body.clientId != null && !/^[A-Za-z0-9-]{6,64}$/.test(String(body.clientId))) return 'Mã báo cáo không hợp lệ.';
   return null;
@@ -791,10 +792,16 @@ async function handleCreateReport(req, res) {
   const fileName = body.fileName ? String(body.fileName).trim().slice(0, 120) : null;
   const fileHash = body.fileHash ? String(body.fileHash).trim().toLowerCase().slice(0, 128) : null;
   const rawContent = String(body.content || '').trim();
-  const rawTarget = String(body.targetValue || '').trim();
+  const rawTarget = String(body.targetValue ?? body.target ?? '').trim();
   const targetValue = rawTarget || normalizeTarget(normType, rawTarget, rawContent, fileHash, fileName);
   const content = rawContent || `Báo cáo ${normType}: ${targetValue}`;
-  const channels = parseChannels(body.channels);
+  let channels = parseChannels(body.channels);
+  if (body.recipients && typeof body.recipients === 'object') {
+    channels = [];
+    if (body.recipients.server) channels.push('server');
+    if (body.recipients.officials || body.recipients.officer) channels.push('officer');
+    if (body.recipients.family) channels.push('family');
+  }
   if (!channels.length) channels.push('server');
   const ward = body.ward ? String(body.ward).trim().slice(0, 80) : 'Đồng Nai';
   const forwardPolice = !!body.forwardPolice || channels.includes('officer');
@@ -828,10 +835,10 @@ async function handleCreateReport(req, res) {
   });
 }
 
-function handleListReports(req, res, url) {
+function handleListReports(req, res, url, forcedStatus = null) {
   if (!checkAdminAuth(req, res)) return;
   const limit = Math.min(200, Math.max(1, Number(url.searchParams.get('limit')) || 80));
-  const statusFilter = url.searchParams.get('status');
+  const statusFilter = forcedStatus || url.searchParams.get('status');
   let items = db.list(limit).map(serializeRow);
   if (statusFilter && REVIEW_STATUSES.includes(statusFilter)) {
     items = items.filter((r) => r.status === statusFilter);
@@ -850,14 +857,15 @@ async function handleReviewReport(req, res, idStr) {
   } catch {
     return send(res, 400, { error: 'Dữ liệu kiểm duyệt không đúng JSON.' });
   }
-  if (!REVIEW_STATUSES.includes(body.status)) {
+  const mappedStatus = body.action === 'approve' ? 'verified' : body.action === 'reject' ? 'dismissed' : body.status;
+  if (!REVIEW_STATUSES.includes(mappedStatus)) {
     return send(res, 400, { error: 'Trạng thái kiểm duyệt phải là pending, verified hoặc dismissed.' });
   }
   if (body.riskLevel != null && !RISK_LEVELS.includes(body.riskLevel)) {
     return send(res, 400, { error: 'Mức rủi ro không hợp lệ.' });
   }
   const reviewerNote = typeof body.reviewerNote === 'string' ? body.reviewerNote.trim().slice(0, 500) : undefined;
-  const updated = db.review(id, { status: body.status, reviewerNote, riskLevel: body.riskLevel });
+  const updated = db.review(id, { status: mappedStatus, reviewerNote, riskLevel: body.riskLevel });
   if (!updated) return send(res, 404, { error: 'Không tìm thấy báo cáo này.' });
 
   return send(res, 200, {
@@ -905,12 +913,13 @@ const server = http.createServer(async (req, res) => {
       return send(res, 200, { ok: true, virustotal: !!VT_KEY, database: db.kind });
     }
     if (pathname === '/api/stats' && req.method === 'GET') return send(res, 200, db.stats());
-    if (pathname === '/api/watchlist' && req.method === 'GET') return handleWatchlist(req, res, url);
+    if ((pathname === '/api/watchlist' || pathname === '/api/warnings') && req.method === 'GET') return handleWatchlist(req, res, url);
     if (pathname === '/api/lookup' && req.method === 'GET') return handleLookup(req, res, url);
     if (pathname === '/api/reports' && req.method === 'POST') return await handleCreateReport(req, res);
     if (pathname === '/api/reports' && req.method === 'GET') return handleListReports(req, res, url);
+    if (pathname === '/api/moderation' && req.method === 'GET') return handleListReports(req, res, url, 'pending');
 
-    const reviewMatch = pathname.match(/^\/api\/reports\/(\d+)$/);
+    const reviewMatch = pathname.match(/^\/api\/(?:reports|moderation)\/(\d+)$/);
     if (reviewMatch && (req.method === 'PATCH' || req.method === 'POST')) {
       return await handleReviewReport(req, res, reviewMatch[1]);
     }
