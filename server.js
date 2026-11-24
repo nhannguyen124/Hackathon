@@ -8,8 +8,12 @@
    - POST   /api/scan            Nhận tệp (≤ 32 MB) → tra cứu / gửi lên VirusTotal
    - GET    /api/scan/:id        Hỏi kết quả phân tích VirusTotal
    - POST   /api/reports         Lưu báo cáo (người thân / cán bộ / máy chủ)
-   - GET    /api/reports         Danh sách báo cáo để kiểm tra, kiểm duyệt
-   - PATCH  /api/reports/:id     Cán bộ kiểm duyệt báo cáo (duyệt / bỏ qua)
+   - POST   /api/auth/register   Đăng ký tài khoản (người dân / tình nguyện viên)
+   - POST   /api/auth/login      Đăng nhập → token (Bearer)
+   - POST   /api/auth/logout     Đăng xuất (thu hồi token)
+   - GET    /api/auth/me         Thông tin tài khoản hiện tại
+   - GET    /api/reports         [Quản trị viên] Danh sách báo cáo để kiểm duyệt
+   - PATCH  /api/reports/:id     [Quản trị viên] Duyệt / bỏ qua báo cáo
    - GET    /api/watchlist       Danh sách cảnh báo tổng hợp (SĐT, web, mã file độc, STK)
    - GET    /api/lookup?q=...    Đối chiếu nhanh nội dung với danh sách cảnh báo
    - GET    /api/stats           Thống kê tổng hợp
@@ -611,16 +615,155 @@ function readBody(req, limit) {
   });
 }
 
-function checkAdminAuth(req, res) {
-  if (!ADMIN_TOKEN) return true; // Chế độ prototype: cho phép cán bộ xem/kiểm duyệt trực tiếp khi chưa đặt ADMIN_TOKEN
-  const given = Buffer.from(String(req.headers['x-admin-token'] || ''));
-  const expected = Buffer.from(ADMIN_TOKEN);
-  const ok = given.length === expected.length && crypto.timingSafeEqual(given, expected);
-  if (!ok) {
-    send(res, 401, { error: 'Cần mã quản trị hợp lệ (x-admin-token) để thực hiện thao tác này.' });
-    return false;
+/* ---------- Tài khoản: đăng ký / đăng nhập / phân quyền ---------- */
+const USERS_FILE = path.join(DATA_DIR, 'users.json');
+const TOKEN_TTL_MS = 7 * 24 * 3600 * 1000;
+const revokedTokens = new Map();
+
+function hashPassword(password, saltHex) {
+  const salt = saltHex ? Buffer.from(saltHex, 'hex') : crypto.randomBytes(16);
+  const hash = crypto.scryptSync(password, salt, 32);
+  return `${salt.toString('hex')}:${hash.toString('hex')}`;
+}
+function verifyPassword(password, stored) {
+  const [saltHex, hashHex] = String(stored || '').split(':');
+  if (!saltHex || !hashHex) return false;
+  const expected = Buffer.from(hashHex, 'hex');
+  const actual = crypto.scryptSync(password, Buffer.from(saltHex, 'hex'), expected.length);
+  return crypto.timingSafeEqual(actual, expected);
+}
+
+const userStore = (() => {
+  let users = [];
+  try { users = JSON.parse(fs.readFileSync(USERS_FILE, 'utf8')); } catch { users = []; }
+  const persist = () => {
+    const tmp = USERS_FILE + '.tmp';
+    fs.writeFileSync(tmp, JSON.stringify(users, null, 2), { mode: 0o600 });
+    fs.renameSync(tmp, USERS_FILE);
+  };
+  const add = (u) => {
+    const row = { id: users.length ? Math.max(...users.map((x) => x.id)) + 1 : 1, createdAt: new Date().toISOString(), ...u };
+    users.push(row);
+    persist();
+    return row;
+  };
+  if (!users.length) {
+    const adminName = (process.env.ADMIN_USERNAME || 'admin').toLowerCase();
+    const adminPass = process.env.ADMIN_PASSWORD || 'admin123';
+    add({ username: adminName, fullName: 'Quản trị viên Công an TP', role: 'admin', ward: 'TP. Biên Hòa', passwordHash: hashPassword(adminPass) });
+    add({ username: 'tinhnguyen', fullName: 'Nguyễn Minh Khoa (Đội tình nguyện)', role: 'volunteer', ward: 'P. Trảng Dai', passwordHash: hashPassword('123456') });
+    add({ username: 'nguoidan', fullName: 'Trần Thị Lan', role: 'user', ward: 'P. Tân Hiệp', passwordHash: hashPassword('123456') });
+    if (!process.env.ADMIN_PASSWORD) console.warn('[auth] Đang dùng tài khoản demo admin/admin123 – hãy đặt ADMIN_USERNAME & ADMIN_PASSWORD trong .env khi triển khai thật.');
   }
-  return true;
+  return {
+    byUsername: (name) => users.find((u) => u.username === name) || null,
+    byId: (id) => users.find((u) => u.id === id) || null,
+    add
+  };
+})();
+
+function publicUser(u) {
+  return { id: u.id, username: u.username, fullName: u.fullName, role: u.role, ward: u.ward || '' };
+}
+
+const AUTH_SECRET = (() => {
+  if (process.env.AUTH_SECRET) return Buffer.from(process.env.AUTH_SECRET);
+  const f = path.join(DATA_DIR, '.auth_secret');
+  try { return Buffer.from(fs.readFileSync(f, 'utf8').trim(), 'hex'); } catch { /* tạo mới */ }
+  const s = crypto.randomBytes(32);
+  fs.writeFileSync(f, s.toString('hex'), { mode: 0o600 });
+  return s;
+})();
+
+function signToken(user) {
+  const payload = Buffer.from(JSON.stringify({ uid: user.id, exp: Date.now() + TOKEN_TTL_MS, jti: crypto.randomBytes(6).toString('hex') })).toString('base64url');
+  const sig = crypto.createHmac('sha256', AUTH_SECRET).update(payload).digest('base64url');
+  return `${payload}.${sig}`;
+}
+function parseBearer(req) {
+  const m = /^Bearer\s+(.+)$/i.exec(String(req.headers.authorization || ''));
+  return m ? m[1].trim() : '';
+}
+function currentUser(req) {
+  const token = parseBearer(req);
+  if (!token || revokedTokens.has(token)) return null;
+  const [payload, sig] = token.split('.');
+  if (!payload || !sig) return null;
+  const expected = crypto.createHmac('sha256', AUTH_SECRET).update(payload).digest('base64url');
+  const a = Buffer.from(sig); const b = Buffer.from(expected);
+  if (a.length !== b.length || !crypto.timingSafeEqual(a, b)) return null;
+  try {
+    const data = JSON.parse(Buffer.from(payload, 'base64url').toString('utf8'));
+    if (!data.exp || data.exp < Date.now()) return null;
+    return userStore.byId(data.uid);
+  } catch { return null; }
+}
+
+/* Chỉ Quản trị viên (tài khoản role=admin hoặc mã ADMIN_TOKEN của máy chủ) mới được kiểm duyệt */
+function checkAdminAuth(req, res) {
+  const user = currentUser(req);
+  if (user && user.role === 'admin') return true;
+  if (ADMIN_TOKEN) {
+    const given = Buffer.from(String(req.headers['x-admin-token'] || ''));
+    const expected = Buffer.from(ADMIN_TOKEN);
+    if (given.length === expected.length && crypto.timingSafeEqual(given, expected)) return true;
+  }
+  if (!user) send(res, 401, { error: 'Hãy đăng nhập bằng tài khoản Quản trị viên để kiểm duyệt báo cáo.' });
+  else send(res, 403, { error: 'Chỉ Quản trị viên mới có quyền kiểm duyệt báo cáo.' });
+  return false;
+}
+
+async function readJson(req, res, limit = MAX_JSON) {
+  try {
+    return JSON.parse((await readBody(req, limit)).toString('utf8') || '{}');
+  } catch (err) {
+    send(res, err.status === 413 ? 413 : 400, { error: err.status === 413 ? 'Dữ liệu quá lớn.' : 'Dữ liệu gửi lên không đúng định dạng JSON.' });
+    return null;
+  }
+}
+
+async function handleRegister(req, res) {
+  if (rateLimited(req, 'register', 10, 10 * 60000)) return send(res, 429, { error: 'Bạn đăng ký quá nhiều lần. Hãy thử lại sau ít phút.' });
+  const body = await readJson(req, res);
+  if (!body) return;
+  const username = String(body.username || '').trim().toLowerCase();
+  const fullName = String(body.fullName || '').trim().slice(0, 60);
+  const password = String(body.password || '');
+  const ward = String(body.ward || '').trim().slice(0, 60);
+  if (fullName.length < 2) return send(res, 400, { error: 'Hãy nhập họ và tên của bạn.' });
+  if (!/^[a-z0-9._]{3,30}$/.test(username)) return send(res, 400, { error: 'Tên đăng nhập / số điện thoại gồm 3–30 ký tự chữ thường, số, dấu chấm hoặc gạch dưới.' });
+  if (password.length < 6 || password.length > 100) return send(res, 400, { error: 'Mật khẩu cần có ít nhất 6 ký tự.' });
+  if (userStore.byUsername(username)) return send(res, 409, { error: 'Tên đăng nhập này đã có người dùng. Hãy chọn tên khác hoặc đăng nhập.' });
+  // Đăng ký công khai chỉ tạo tài khoản người dân hoặc tình nguyện viên – KHÔNG bao giờ tạo admin
+  const role = body.volunteer ? 'volunteer' : 'user';
+  const user = userStore.add({ username, fullName, role, ward, passwordHash: hashPassword(password) });
+  return send(res, 201, { user: publicUser(user), token: signToken(user) });
+}
+
+async function handleLogin(req, res) {
+  if (rateLimited(req, 'login', 12, 5 * 60000)) return send(res, 429, { error: 'Bạn thử đăng nhập quá nhiều lần. Hãy đợi vài phút.' });
+  const body = await readJson(req, res);
+  if (!body) return;
+  const username = String(body.username || '').trim().toLowerCase();
+  const user = userStore.byUsername(username);
+  const ok = user && verifyPassword(String(body.password || ''), user.passwordHash);
+  if (!ok) return send(res, 401, { error: 'Sai tên đăng nhập hoặc mật khẩu.' });
+  return send(res, 200, { user: publicUser(user), token: signToken(user) });
+}
+
+function handleLogout(req, res) {
+  const token = parseBearer(req);
+  if (token) {
+    revokedTokens.set(token, Date.now() + TOKEN_TTL_MS);
+    for (const [t, exp] of revokedTokens) if (exp < Date.now()) revokedTokens.delete(t);
+  }
+  return send(res, 200, { ok: true });
+}
+
+function handleMe(req, res) {
+  const user = currentUser(req);
+  if (!user) return send(res, 401, { error: 'Phiên đăng nhập đã hết hạn. Hãy đăng nhập lại.' });
+  return send(res, 200, { user: publicUser(user) });
 }
 
 /* Giới hạn tần suất đơn giản theo IP (chống spam báo cáo / quét) */
@@ -912,6 +1055,10 @@ const server = http.createServer(async (req, res) => {
     if (pathname === '/api/health' && req.method === 'GET') {
       return send(res, 200, { ok: true, virustotal: !!VT_KEY, database: db.kind });
     }
+    if (pathname === '/api/auth/register' && req.method === 'POST') return await handleRegister(req, res);
+    if (pathname === '/api/auth/login' && req.method === 'POST') return await handleLogin(req, res);
+    if (pathname === '/api/auth/logout' && req.method === 'POST') return handleLogout(req, res);
+    if (pathname === '/api/auth/me' && req.method === 'GET') return handleMe(req, res);
     if (pathname === '/api/stats' && req.method === 'GET') return send(res, 200, db.stats());
     if ((pathname === '/api/watchlist' || pathname === '/api/warnings') && req.method === 'GET') return handleWatchlist(req, res, url);
     if (pathname === '/api/lookup' && req.method === 'GET') return handleLookup(req, res, url);
