@@ -1,0 +1,370 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Lá Chắn Số – Mô hình kiểm thử UX/UI</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div class="workspace">
+    <!-- BẢNG ĐIỀU KHIỂN KIỂM THỬ UX/UI (INSPECTOR) -->
+    <aside class="inspector">
+      <div class="inspector-header">
+        <span class="badge-proto">UX/UI PROTOTYPE</span>
+        <h2>Lá Chắn Số – Đồng Nai</h2>
+        <p>Bảng điều khiển kiểm thử khung giao diện & trạng thái biên.</p>
+      </div>
+
+      <div class="inspector-group">
+        <h3>1. Chuyển nhanh 06 màn hình</h3>
+        <div class="btn-grid">
+          <button class="ins-btn active" data-goto="home">01. Trang chủ</button>
+          <button class="ins-btn" data-goto="result">02. Kết quả</button>
+          <button class="ins-btn" data-goto="report">03. Báo cáo</button>
+          <button class="ins-btn" data-goto="learn">04. Bài học 1p</button>
+          <button class="ins-btn" data-goto="quiz">05. Quiz nhận diện</button>
+          <button class="ins-btn" data-goto="dashboard">06. Tình nguyện</button>
+        </div>
+      </div>
+
+      <div class="inspector-group">
+        <h3>2. Chế độ thích ứng (Adaptive UI)</h3>
+        <label class="toggle-row">
+          <span>Chế độ Người cao tuổi (A+)</span>
+          <input type="checkbox" id="insSeniorToggle" />
+        </label>
+        <label class="toggle-row">
+          <span>Giả lập Mất mạng (Offline)</span>
+          <input type="checkbox" id="insOfflineToggle" />
+        </label>
+      </div>
+
+      <div class="inspector-group">
+        <h3>3. Kiểm thử mức độ cảnh báo (Màn 02)</h3>
+        <div class="btn-row-3">
+          <button class="ins-pill danger" onclick="setRiskLevel('danger')">Nguy hiểm</button>
+          <button class="ins-pill warning" onclick="setRiskLevel('warning')">Nghi ngờ</button>
+          <button class="ins-pill safe" onclick="setRiskLevel('safe')">An toàn</button>
+        </div>
+      </div>
+
+      <div class="inspector-group">
+        <h3>4. Kiểm thử Trạng thái Lỗi / Trống</h3>
+        <div class="btn-grid">
+          <button class="ins-btn outline" onclick="triggerInputError()">Lỗi nhập sai định dạng</button>
+          <button class="ins-btn outline" onclick="openFamilyModal(true)">Trống danh sách người thân</button>
+        </div>
+      </div>
+    </aside>
+
+    <!-- KHUNG ĐIỆN THOẠI MÔ PHỎNG (390x844px) -->
+    <main class="stage">
+      <div class="phone-frame" id="phoneFrame">
+        <!-- TOP BAR -->
+        <header class="app-header">
+          <div class="brand">
+            <span class="brand-icon">🛡️</span>
+            <span class="brand-name">Lá Chắn Số</span>
+          </div>
+          <div class="header-actions">
+            <button class="chip-senior" id="btnSeniorMode" title="Chế độ người cao tuổi">
+              A+ Người lớn
+            </button>
+          </div>
+        </header>
+
+        <!-- BANNER MẤT MẠNG (OFFLINE) -->
+        <div class="offline-banner hidden" id="offlineBanner">
+          <span>⚠️ <strong>Mất kết nối mạng</strong> • Đang dùng bộ nhớ an toàn trên máy</span>
+        </div>
+
+        <!-- NỘI DUNG CÁC MÀN HÌNH -->
+        <div class="screen-container">
+          <!-- MÀN 01: TRANG CHỦ & KIỂM TRA NHANH -->
+          <section class="screen active" id="screen-home">
+            <div class="hero-card">
+              <h1>Kiểm tra nhanh trước khi chuyển tiền</h1>
+              <p class="subtitle standard-only">
+                Nhập SĐT, số tài khoản, đường dẫn hoặc dán tin nhắn nghi ngờ để AI kiểm tra.
+              </p>
+
+              <div class="omni-box" id="omniBox">
+                <textarea
+                  id="checkInput"
+                  rows="3"
+                  placeholder="Dán tin nhắn, nhập SĐT, link hoặc số tài khoản..."
+                ></textarea>
+                <div class="omni-tools">
+                  <button class="tool-btn" onclick="pasteSampleText()">📋 Dán tin mẫu</button>
+                  <button class="tool-btn voice" id="btnVoiceInput" onclick="simulateVoiceInput()">
+                    🎙️ Nói để kiểm tra
+                  </button>
+                </div>
+              </div>
+              <p class="error-msg hidden" id="inputErrorMsg">
+                ⚠️ Định dạng chưa hợp lệ. Vui lòng nhập SĐT, số tài khoản hoặc dán nội dung tin nhắn.
+              </p>
+
+              <button class="btn-primary full-width" onclick="runCheck()">
+                🔍 Kiểm tra ngay
+              </button>
+
+              <!-- Gợi ý thử nhanh (ẩn ở chế độ người lớn tuổi để tối giản) -->
+              <div class="quick-chips standard-only">
+                <button class="q-chip" onclick="fillAndCheck('danger')">Thử: Giả danh Công an</button>
+                <button class="q-chip" onclick="fillAndCheck('warning')">Thử: Link nhận quà</button>
+                <button class="q-chip" onclick="fillAndCheck('safe')">Thử: SĐT an toàn</button>
+              </div>
+            </div>
+
+            <!-- Khối nút lớn ưu tiên cho người cao tuổi -->
+            <div class="sos-card">
+              <div>
+                <strong>Đang bối rối hoặc bị thúc giục?</strong>
+                <p>Bấm gửi cảnh báo ngay cho người thân đã chỉ định.</p>
+              </div>
+              <button class="btn-sos full-width" onclick="openFamilyModal(false)">
+                📞 Hỏi người thân ngay
+              </button>
+            </div>
+          </section>
+
+          <!-- MÀN 02: KẾT QUẢ KIỂM TRA (3 MỨC ĐỘ + OFFLINE) -->
+          <section class="screen" id="screen-result">
+            <div class="result-card danger" id="resultCard">
+              <div class="result-badge" id="resultBadge">🛡️ NGUY HIỂM</div>
+              <h2 id="resultTitle">Có dấu hiệu lừa đảo rõ rệt</h2>
+              <p class="result-meta" id="resultMeta">Phân tích bởi AI • Cập nhật hôm nay</p>
+
+              <ul class="reason-list" id="resultReasons">
+                <li>Cơ quan Công an <strong>không làm việc</strong> hoặc yêu cầu chuyển tiền qua điện thoại.</li>
+                <li>Phát hiện từ khóa thúc giục: <em>"chuyển tiền gấp", "tạm giữ tài khoản"</em>.</li>
+                <li>Số điện thoại trùng khớp với <strong>12 lượt báo cáo</strong> tại địa phương.</li>
+              </ul>
+
+              <button class="btn-audio full-width" id="btnSpeakResult" onclick="toggleSpeak()">
+                🔊 Nghe đọc cảnh báo
+              </button>
+            </div>
+
+            <div class="offline-note hidden" id="offlineResultNote">
+              <strong>Lưu ý ngoại tuyến:</strong> Chưa thể quét sâu bằng AI do mất mạng. Tuyệt đối KHÔNG chuyển tiền lúc này.
+            </div>
+
+            <div class="action-stack">
+              <button class="btn-sos full-width" onclick="openFamilyModal(false)">
+                📞 Hỏi người thân (Hỗ trợ gọi/SMS)
+              </button>
+              <button class="btn-secondary full-width" onclick="navigateTo('report')">
+                🚨 Báo cáo & Chuyển kênh Công an
+              </button>
+              <button class="btn-text full-width" onclick="navigateTo('home')">
+                ← Kiểm tra nội dung khác
+              </button>
+            </div>
+          </section>
+
+          <!-- MÀN 03: BÁO CÁO LỪA ĐẢO -->
+          <section class="screen" id="screen-report">
+            <h2 class="screen-title">Báo cáo trường hợp lừa đảo</h2>
+            <div class="step-indicator">Bước 1: Chọn loại • Bước 2: Nội dung • Bước 3: Gửi</div>
+
+            <div class="type-grid">
+              <button class="type-card active" onclick="selectReportType(this)">📞 Cuộc gọi</button>
+              <button class="type-card" onclick="selectReportType(this)">💬 Tin nhắn</button>
+              <button class="type-card" onclick="selectReportType(this)">🔗 Đường dẫn</button>
+              <button class="type-card" onclick="selectReportType(this)">🏦 Số tài khoản</button>
+            </div>
+
+            <div class="form-group">
+              <label>Nội dung / SĐT / Link nghi ngờ</label>
+              <textarea rows="3" placeholder="Nhập thông tin đối tượng lừa đảo (dữ liệu giả lập)..."></textarea>
+            </div>
+
+            <label class="switch-card">
+              <div>
+                <strong>Gửi đồng thời kênh Công an</strong>
+                <small>Chuyển tiếp dữ liệu tới kênh tiếp nhận tin báo địa phương</small>
+              </div>
+              <input type="checkbox" checked />
+            </label>
+
+            <button class="btn-primary full-width" id="btnSubmitReport" onclick="submitReport()">
+              Gửi báo cáo ngay
+            </button>
+          </section>
+
+          <!-- MÀN 04: BÀI HỌC 01 PHÚT (DẠNG THẺ LẬT) -->
+          <section class="screen" id="screen-learn">
+            <h2 class="screen-title">Bài học 01 phút theo tình huống</h2>
+            <p class="subtitle">Chạm vào thẻ để lật xem dấu hiệu nhận biết & cách xử lý.</p>
+
+            <div class="flip-card" id="flipCard" onclick="this.classList.toggle('flipped')">
+              <div class="flip-inner">
+                <div class="flip-front">
+                  <span class="tag-pill">Tình huống 01/10</span>
+                  <div class="card-emoji">👮‍♂️⚠️</div>
+                  <h3>Giả danh Công an yêu cầu chuyển tiền</h3>
+                  <p>Gọi điện đe dọa liên quan vụ án, yêu cầu chuyển tiền vào "tài khoản tạm giữ" để xác minh.</p>
+                  <span class="tap-hint">👆 Chạm để xem cách phòng tránh</span>
+                </div>
+                <div class="flip-back">
+                  <span class="tag-pill safe">Cách xử lý trong 30 giây</span>
+                  <ul>
+                    <li><strong>1. Cúp máy ngay:</strong> Không tranh cãi, không làm theo hướng dẫn.</li>
+                    <li><strong>2. Không chuyển tiền:</strong> Công an không bao giờ làm việc qua điện thoại.</li>
+                    <li><strong>3. Kiểm chứng:</strong> Bấm nút "Hỏi người thân" hoặc gọi Công an xã/phường.</li>
+                  </ul>
+                  <span class="tap-hint">👆 Chạm để lật lại</span>
+                </div>
+              </div>
+            </div>
+
+            <div class="mini-list">
+              <div class="mini-item">🎁 Đường dẫn nhận quà tri ân <span>1 phút</span></div>
+              <div class="mini-item">💼 Tuyển CTV "việc nhẹ lương cao" <span>1 phút</span></div>
+              <div class="mini-item">🏥 Người thân gặp tai nạn cần tiền gấp <span>1 phút</span></div>
+            </div>
+          </section>
+
+          <!-- MÀN 05: KIỂM TRA NHẬN DIỆN (QUIZ) -->
+          <section class="screen" id="screen-quiz">
+            <div class="quiz-header">
+              <span class="tag-pill">Câu hỏi 1/5</span>
+              <span class="quiz-score" id="quizScore">Điểm: 0</span>
+            </div>
+
+            <div class="mock-sms">
+              <div class="sms-sender">Người lạ (+84 9xx.xxx.xxx)</div>
+              <div class="sms-bubble" id="smsBubble">
+                Chào bạn! Bên mình tuyển CTV đặt đơn hàng online tại nhà,
+                <span class="hl-clue">việc nhẹ lương cao 500k/ngày</span>. Bấm ngay link
+                <span class="hl-clue">bit.ly/nhan-viec-gap</span> để nhận thưởng!
+              </div>
+            </div>
+
+            <div class="quiz-actions">
+              <button class="btn-danger" onclick="answerQuiz(true)">🚨 LỪA ĐẢO</button>
+              <button class="btn-safe" onclick="answerQuiz(false)">✅ AN TOÀN</button>
+            </div>
+
+            <div class="quiz-feedback hidden" id="quizFeedback"></div>
+          </section>
+
+          <!-- MÀN 06: DASHBOARD ĐỘI TÌNH NGUYỆN -->
+          <section class="screen" id="screen-dashboard">
+            <div class="dash-head">
+              <h2 class="screen-title">Thống kê Đội tình nguyện</h2>
+              <span class="tag-pill">Đồng Nai • Tháng 11</span>
+            </div>
+
+            <div class="kpi-grid">
+              <div class="kpi-card">
+                <span class="kpi-num">120</span>
+                <span class="kpi-label">Lượt báo cáo / tháng</span>
+              </div>
+              <div class="kpi-card highlight">
+                <span class="kpi-num">35%</span>
+                <span class="kpi-label">Đường dẫn giả mạo</span>
+              </div>
+            </div>
+
+            <!-- Biểu đồ thanh ngang tối giản -->
+            <div class="chart-card">
+              <h3>Tỷ lệ kiểu lừa đảo tại địa phương</h3>
+              <div class="bar-row">
+                <span>Đường dẫn giả mạo</span>
+                <div class="bar-track"><div class="bar-fill red" style="width: 35%"></div></div>
+                <strong>35%</strong>
+              </div>
+              <div class="bar-row">
+                <span>Giả danh Công an / Ngân hàng</span>
+                <div class="bar-track"><div class="bar-fill amber" style="width: 28%"></div></div>
+                <strong>28%</strong>
+              </div>
+              <div class="bar-row">
+                <span>Việc nhẹ lương cao (CTV)</span>
+                <div class="bar-track"><div class="bar-fill blue" style="width: 22%"></div></div>
+                <strong>22%</strong>
+              </div>
+              <div class="bar-row">
+                <span>Khác (Quà tặng, tai nạn...)</span>
+                <div class="bar-track"><div class="bar-fill gray" style="width: 15%"></div></div>
+                <strong>15%</strong>
+              </div>
+            </div>
+
+            <button class="btn-secondary full-width" onclick="showToast('Đã tạo ảnh cảnh báo nhanh để chia sẻ Zalo xã/phường')">
+              📤 Xuất tờ rơi tuyên truyền nhanh
+            </button>
+          </section>
+        </div>
+
+        <!-- BOTTOM NAVIGATION BAR (4 MỤC) -->
+        <nav class="bottom-nav">
+          <button class="nav-item active" data-goto="home">
+            <span class="nav-ico">🔍</span><span>Kiểm tra</span>
+          </button>
+          <button class="nav-item" data-goto="learn">
+            <span class="nav-ico">📚</span><span>Bài học</span>
+          </button>
+          <button class="nav-item" data-goto="quiz">
+            <span class="nav-ico">🎯</span><span>Thi thử</span>
+          </button>
+          <button class="nav-item" data-goto="dashboard">
+            <span class="nav-ico">📊</span><span>Tình nguyện</span>
+          </button>
+        </nav>
+
+        <!-- BOTTOM SHEET: HỎI NGƯỜI THÂN (CÓ TRẠNG THÁI TRỐNG) -->
+        <div class="modal-backdrop hidden" id="familyModal">
+          <div class="bottom-sheet">
+            <div class="sheet-handle"></div>
+            <h3>Hỏi ý kiến người thân</h3>
+
+            <!-- Trạng thái có dữ liệu -->
+            <div id="familyListView">
+              <p class="subtitle">Chạm để gửi nhanh cảnh báo hoặc gọi trực tiếp:</p>
+              <button class="contact-item" onclick="sendFamilyAlert('Con gái (Minh Anh)')">
+                <div>
+                  <strong>Con gái (Minh Anh)</strong>
+                  <small>090x.xxx.123 • <span class="offline-call-tag">Gọi/SMS không cần mạng</span></small>
+                </div>
+                <span class="contact-action">Gửi ngay</span>
+              </button>
+              <button class="contact-item" onclick="sendFamilyAlert('Con trai (Hoàng Nam)')">
+                <div>
+                  <strong>Con trai (Hoàng Nam)</strong>
+                  <small>091x.xxx.456 • <span class="offline-call-tag">Gọi/SMS không cần mạng</span></small>
+                </div>
+                <span class="contact-action">Gửi ngay</span>
+              </button>
+            </div>
+
+            <!-- Trạng thái trống (Empty State) -->
+            <div id="familyEmptyView" class="empty-state hidden">
+              <div class="empty-icon">👨‍👩‍👧</div>
+              <strong>Chưa cài đặt số người thân</strong>
+              <p>Thêm ít nhất 01 số điện thoại tin cậy để hỏi nhanh khi gặp cuộc gọi lạ.</p>
+              <button class="btn-primary full-width" onclick="openFamilyModal(false)">
+                + Thêm số người thân ngay
+              </button>
+            </div>
+
+            <button class="btn-text full-width" onclick="closeFamilyModal()">Đóng</button>
+          </div>
+        </div>
+
+        <!-- TOAST THÔNG BÁO -->
+        <div class="toast hidden" id="toast"></div>
+      </div>
+    </main>
+  </div>
+
+  <script src="script.js"></script>
+</body>
+</html>
