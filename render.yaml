@@ -1,0 +1,47 @@
+# Render Blueprint cho Lá Chắn Số
+# Cách dùng: Render Dashboard → New → Blueprint → chọn repo này → Apply.
+# Hướng dẫn chi tiết: DEPLOY.md
+services:
+  - type: web
+    name: la-chan-so
+    runtime: node
+    plan: free
+    region: singapore
+    branch: main
+    autoDeployTrigger: commit
+    buildCommand: npm install --no-audit --no-fund
+    startCommand: npm start
+    healthCheckPath: /api/health
+    envVars:
+      # node:sqlite chỉ có từ Node 22, dùng cho data/reports.db
+      - key: NODE_VERSION
+        value: "22"
+      # BẮT BUỘC: Render chỉ nhận traffic khi tiến trình bind 0.0.0.0.
+      # server.js mặc định 127.0.0.1 (chỉ dùng cho máy local) nên phải ghi đè ở đây.
+      - key: HOST
+        value: 0.0.0.0
+      - key: NODE_ENV
+        value: production
+      # Nhập giá trị trong dashboard Render (không lưu vào Git).
+      - key: VIRUSTOTAL_API_KEY
+        sync: false
+      - key: ADMIN_PASSWORD
+        sync: false
+      - key: ADMIN_USERNAME
+        value: admin
+      # Render tự sinh một lần và giữ nguyên qua các lần deploy.
+      # Nếu đổi giá trị này, mọi phiên đăng nhập cũ sẽ hết hiệu lực.
+      - key: AUTH_SECRET
+        generateValue: true
+
+    # Free plan dùng ổ đĩa tạm: data/reports.db và data/users.json sẽ mất mỗi lần
+    # deploy/restart. Muốn giữ dữ liệu: đổi plan sang "starter" rồi bỏ comment
+    # 3 dòng DATA_DIR và khối disk bên dưới.
+    #
+    # envVars:
+    #   - key: DATA_DIR
+    #     value: /var/data
+    # disk:
+    #   name: la-chan-so-data
+    #   mountPath: /var/data
+    #   sizeGB: 1

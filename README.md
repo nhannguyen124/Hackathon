@@ -15,6 +15,8 @@ cp .env.example .env      # tuỳ chọn điền VIRUSTOTAL_API_KEY, ADMIN_USERN
 npm start                 # mở http://localhost:3000
 ```
 
+Đưa lên mạng để bản public quét VirusTotal thật (Render, kèm `render.yaml`): xem [DEPLOY.md](DEPLOY.md).
+
 - **Giao diện vừa khít màn hình điện thoại**: Trang 1 tinh gọn trên một màn hình đơn, không cần cuộn dài; trên thiết bị cảm ứng hỗ trợ mở trực tiếp ứng dụng gọi điện (`tel:`) và nhắn tin (`sms:`).
 - **Báo cáo đa kênh & lưu trữ ngoại tuyến**: Gửi tới **Người thân**, **Cán bộ / Công an xã phường**, hoặc gửi **Số điện thoại, Trang web, Mã file độc (SHA-256), Tài khoản** lên **Máy chủ** để tự động tổng hợp vào **Danh sách cảnh báo** (`data/reports.db` dùng `node:sqlite`, hoặc `data/reports.json`). Khi mất mạng, báo cáo được giữ trên máy và tự đồng bộ khi có mạng lại.
 - **Bài học & Thi thử gộp gọn**: Chuyển đổi mượt giữa Bài học 1 phút và Thi thử nhận diện (5 câu) trong cùng một trang kỹ năng.
