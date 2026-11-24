@@ -2,369 +2,697 @@
 <html lang="vi">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Lá Chắn Số – Mô hình kiểm thử UX/UI</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="theme-color" content="#0F172A" />
+  <meta name="description" content="Lá Chắn Số – Clickable prototype ứng dụng web phòng chống lừa đảo trực tuyến tại Đồng Nai." />
+  <title>Lá Chắn Số – Prototype UX/UI</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
-  <div class="workspace">
-    <!-- BẢNG ĐIỀU KHIỂN KIỂM THỬ UX/UI (INSPECTOR) -->
-    <aside class="inspector">
-      <div class="inspector-header">
-        <span class="badge-proto">UX/UI PROTOTYPE</span>
-        <h2>Lá Chắn Số – Đồng Nai</h2>
-        <p>Bảng điều khiển kiểm thử khung giao diện & trạng thái biên.</p>
-      </div>
 
-      <div class="inspector-group">
-        <h3>1. Chuyển nhanh 06 màn hình</h3>
-        <div class="btn-grid">
-          <button class="ins-btn active" data-goto="home">01. Trang chủ</button>
-          <button class="ins-btn" data-goto="result">02. Kết quả</button>
-          <button class="ins-btn" data-goto="report">03. Báo cáo</button>
-          <button class="ins-btn" data-goto="learn">04. Bài học 1p</button>
-          <button class="ins-btn" data-goto="quiz">05. Quiz nhận diện</button>
-          <button class="ins-btn" data-goto="dashboard">06. Tình nguyện</button>
+<!-- =========================================================
+     SVG ICON SPRITE (nét Lucide, stroke 2px, bo đầu tròn)
+     ========================================================= -->
+<svg class="sprite" aria-hidden="true" focusable="false">
+  <symbol id="i-shield" viewBox="0 0 24 24"><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/></symbol>
+  <symbol id="i-shield-check" viewBox="0 0 24 24"><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/><path d="m9 12 2 2 4-4"/></symbol>
+  <symbol id="i-shield-alert" viewBox="0 0 24 24"><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/><path d="M12 8v4"/><path d="M12 16h.01"/></symbol>
+  <symbol id="i-shield-question" viewBox="0 0 24 24"><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/><path d="M9.6 9.4a2.5 2.5 0 0 1 4.85.85c0 1.7-2.45 2.3-2.45 2.3"/><path d="M12 16h.01"/></symbol>
+  <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></symbol>
+  <symbol id="i-mic" viewBox="0 0 24 24"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><path d="M12 19v3"/></symbol>
+  <symbol id="i-clipboard" viewBox="0 0 24 24"><rect width="8" height="4" x="8" y="2" rx="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><path d="M9 12h6"/><path d="M9 16h4"/></symbol>
+  <symbol id="i-users" viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></symbol>
+  <symbol id="i-user-plus" viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M19 8v6"/><path d="M22 11h-6"/></symbol>
+  <symbol id="i-book" viewBox="0 0 24 24"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></symbol>
+  <symbol id="i-clipboard-check" viewBox="0 0 24 24"><rect width="8" height="4" x="8" y="2" rx="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><path d="m9 14 2 2 4-4"/></symbol>
+  <symbol id="i-hand-heart" viewBox="0 0 24 24"><path d="M11 14h2a2 2 0 1 0 0-4h-3c-.6 0-1.1.2-1.4.6L3 16"/><path d="m7 20 1.6-1.4c.3-.4.8-.6 1.4-.6h4c1.1 0 2.1-.4 2.8-1.2l4.6-4.4a2 2 0 0 0-2.75-2.91l-4.2 3.9"/><path d="m2 15 6 6"/><path d="M19.5 8.5c.7-.7 1.5-1.6 1.5-2.7A2.73 2.73 0 0 0 16 4a2.78 2.78 0 0 0-5 1.8c0 1.2.8 2 1.5 2.8L16 12Z"/></symbol>
+  <symbol id="i-phone" viewBox="0 0 24 24"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></symbol>
+  <symbol id="i-phone-off" viewBox="0 0 24 24"><path d="M10.68 13.31a16 16 0 0 0 3.41 2.6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7 2 2 0 0 1 1.72 2v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.42 19.42 0 0 1-3.33-2.67m-2.67-3.34a19.79 19.79 0 0 1-3.07-8.63A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91"/><path d="M22 2 2 22"/></symbol>
+  <symbol id="i-message" viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></symbol>
+  <symbol id="i-link" viewBox="0 0 24 24"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></symbol>
+  <symbol id="i-landmark" viewBox="0 0 24 24"><path d="M3 22h18"/><path d="M6 18v-7"/><path d="M10 18v-7"/><path d="M14 18v-7"/><path d="M18 18v-7"/><path d="m12 2 8 5H4z"/></symbol>
+  <symbol id="i-volume" viewBox="0 0 24 24"><path d="M11 5 6 9H2v6h4l5 4z"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/></symbol>
+  <symbol id="i-stop" viewBox="0 0 24 24"><rect width="12" height="12" x="6" y="6" rx="2.5"/></symbol>
+  <symbol id="i-send" viewBox="0 0 24 24"><path d="m22 2-7 20-4-9-9-4Z"/><path d="M22 2 11 13"/></symbol>
+  <symbol id="i-flag" viewBox="0 0 24 24"><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><path d="M4 22v-7"/></symbol>
+  <symbol id="i-chevron-left" viewBox="0 0 24 24"><path d="m15 18-6-6 6-6"/></symbol>
+  <symbol id="i-chevron-right" viewBox="0 0 24 24"><path d="m9 18 6-6-6-6"/></symbol>
+  <symbol id="i-x" viewBox="0 0 24 24"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></symbol>
+  <symbol id="i-check" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></symbol>
+  <symbol id="i-alert-circle" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 8v4"/><path d="M12 16h.01"/></symbol>
+  <symbol id="i-alert-triangle" viewBox="0 0 24 24"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"/><path d="M12 9v4"/><path d="M12 17h.01"/></symbol>
+  <symbol id="i-info" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></symbol>
+  <symbol id="i-wifi" viewBox="0 0 24 24"><path d="M12 20h.01"/><path d="M2 8.82a15 15 0 0 1 20 0"/><path d="M5 12.86a10 10 0 0 1 14 0"/><path d="M8.5 16.43a5 5 0 0 1 7 0"/></symbol>
+  <symbol id="i-wifi-off" viewBox="0 0 24 24"><path d="M12 20h.01"/><path d="M8.5 16.43a5 5 0 0 1 7 0"/><path d="M5 12.86a10 10 0 0 1 5.17-2.69"/><path d="M19 12.86a10 10 0 0 0-2-1.52"/><path d="M2 8.82a15 15 0 0 1 4.18-2.64"/><path d="M22 8.82a15 15 0 0 0-11.29-3.76"/><path d="m2 2 20 20"/></symbol>
+  <symbol id="i-sparkles" viewBox="0 0 24 24"><path d="M9.94 15.5A2 2 0 0 0 8.5 14.06l-6.14-1.58a.5.5 0 0 1 0-.96L8.5 9.94A2 2 0 0 0 9.94 8.5l1.58-6.14a.5.5 0 0 1 .96 0l1.58 6.14a2 2 0 0 0 1.44 1.44l6.14 1.58a.5.5 0 0 1 0 .96l-6.14 1.58a2 2 0 0 0-1.44 1.44l-1.58 6.14a.5.5 0 0 1-.96 0z"/><path d="M20 3v4"/><path d="M22 5h-4"/></symbol>
+  <symbol id="i-rotate" viewBox="0 0 24 24"><path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/></symbol>
+  <symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></symbol>
+  <symbol id="i-gift" viewBox="0 0 24 24"><rect x="3" y="8" width="18" height="4" rx="1"/><path d="M12 8v13"/><path d="M19 12v7a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2v-7"/><path d="M7.5 8a2.5 2.5 0 0 1 0-5C10 3 12 8 12 8s2-5 4.5-5a2.5 2.5 0 0 1 0 5"/></symbol>
+  <symbol id="i-briefcase" viewBox="0 0 24 24"><path d="M16 20V4a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/><rect width="20" height="14" x="2" y="6" rx="2"/></symbol>
+  <symbol id="i-heart-pulse" viewBox="0 0 24 24"><path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z"/><path d="M3.22 12H9.5l.5-1 2 4.5 2-7 1.5 3.5h5.27"/></symbol>
+  <symbol id="i-badge-alert" viewBox="0 0 24 24"><path d="M3.85 8.62a4 4 0 0 1 4.78-4.77 4 4 0 0 1 6.74 0 4 4 0 0 1 4.78 4.78 4 4 0 0 1 0 6.74 4 4 0 0 1-4.77 4.78 4 4 0 0 1-6.75 0 4 4 0 0 1-4.78-4.77 4 4 0 0 1 0-6.76Z"/><path d="M12 8v4"/><path d="M12 16h.01"/></symbol>
+  <symbol id="i-star" viewBox="0 0 24 24"><path d="m12 2 3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01z"/></symbol>
+  <symbol id="i-trophy" viewBox="0 0 24 24"><path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6"/><path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18"/><path d="M4 22h16"/><path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22"/><path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22"/><path d="M18 2H6v7a6 6 0 0 0 12 0V2Z"/></symbol>
+  <symbol id="i-trending-up" viewBox="0 0 24 24"><path d="m22 7-8.5 8.5-5-5L2 17"/><path d="M16 7h6v6"/></symbol>
+  <symbol id="i-map-pin" viewBox="0 0 24 24"><path d="M20 10c0 4.99-5.54 10.19-7.4 11.8a1 1 0 0 1-1.2 0C9.54 20.19 4 14.99 4 10a8 8 0 0 1 16 0"/><circle cx="12" cy="10" r="3"/></symbol>
+  <symbol id="i-image" viewBox="0 0 24 24"><rect width="18" height="18" x="3" y="3" rx="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.09-3.09a2 2 0 0 0-2.82 0L6 21"/></symbol>
+  <symbol id="i-download" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m7 10 5 5 5-5"/><path d="M12 15V3"/></symbol>
+  <symbol id="i-share" viewBox="0 0 24 24"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="m8.59 13.51 6.83 3.98"/><path d="m15.41 6.51-6.82 3.98"/></symbol>
+  <symbol id="i-plus" viewBox="0 0 24 24"><path d="M5 12h14"/><path d="M12 5v14"/></symbol>
+  <symbol id="i-grid" viewBox="0 0 24 24"><rect width="7" height="7" x="3" y="3" rx="1.5"/><rect width="7" height="7" x="14" y="3" rx="1.5"/><rect width="7" height="7" x="14" y="14" rx="1.5"/><rect width="7" height="7" x="3" y="14" rx="1.5"/></symbol>
+  <symbol id="i-smartphone" viewBox="0 0 24 24"><rect width="14" height="20" x="5" y="2" rx="2"/><path d="M12 18h.01"/></symbol>
+  <symbol id="i-printer" viewBox="0 0 24 24"><path d="M6 9V2h12v7"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect width="12" height="8" x="6" y="14"/></symbol>
+  <symbol id="i-sliders" viewBox="0 0 24 24"><path d="M20 7h-9"/><path d="M14 17H5"/><circle cx="17" cy="17" r="3"/><circle cx="7" cy="7" r="3"/></symbol>
+  <symbol id="i-database" viewBox="0 0 24 24"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5v14a9 3 0 0 0 18 0V5"/><path d="M3 12a9 3 0 0 0 18 0"/></symbol>
+  <symbol id="i-flame" viewBox="0 0 24 24"><path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.07-2.14-.22-4.05 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.15.43-2.29 1-3a2.5 2.5 0 0 0 2.5 2.5z"/></symbol>
+  <symbol id="i-ban" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="m4.9 4.9 14.2 14.2"/></symbol>
+  <symbol id="i-save" viewBox="0 0 24 24"><path d="M15.2 3a2 2 0 0 1 1.4.6l3.8 3.8a2 2 0 0 1 .6 1.4V19a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z"/><path d="M17 21v-7a1 1 0 0 0-1-1H8a1 1 0 0 0-1 1v7"/><path d="M7 3v4a1 1 0 0 0 1 1h7"/></symbol>
+  <symbol id="i-arrow-right" viewBox="0 0 24 24"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></symbol>
+  <symbol id="i-eye" viewBox="0 0 24 24"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></symbol>
+  <symbol id="i-lock" viewBox="0 0 24 24"><rect width="18" height="11" x="3" y="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></symbol>
+  <symbol id="i-menu" viewBox="0 0 24 24"><path d="M4 6h16"/><path d="M4 12h16"/><path d="M4 18h16"/></symbol>
+</svg>
+
+<div class="workspace" id="workspace">
+
+  <!-- =========================================================
+       PROTOTYPE INSPECTOR (Sidebar 320px)
+       ========================================================= -->
+  <aside class="inspector" id="inspector" aria-label="Prototype Inspector">
+    <div class="ins-scroll">
+      <header class="ins-brand">
+        <span class="ins-logo"><svg class="ic"><use href="#i-shield-check"/></svg></span>
+        <div>
+          <p class="ins-name">Lá Chắn Số</p>
+          <p class="ins-sub">Prototype Inspector · Đồng Nai</p>
         </div>
-      </div>
+        <button class="ins-close" id="insClose" aria-label="Đóng bảng điều khiển"><svg class="ic"><use href="#i-x"/></svg></button>
+      </header>
 
-      <div class="inspector-group">
-        <h3>2. Chế độ thích ứng (Adaptive UI)</h3>
-        <label class="toggle-row">
-          <span>Chế độ Người cao tuổi (A+)</span>
-          <input type="checkbox" id="insSeniorToggle" />
-        </label>
-        <label class="toggle-row">
-          <span>Giả lập Mất mạng (Offline)</span>
-          <input type="checkbox" id="insOfflineToggle" />
-        </label>
-      </div>
+      <section class="ins-group">
+        <h2 class="ins-title"><span class="ins-num">1</span>Chuyển màn hình</h2>
+        <nav class="ins-screens" aria-label="Danh sách màn hình">
+          <button class="ins-screen is-active" data-action="go" data-target="home"><span class="ins-code">01</span><span class="ins-label">Trang chủ &amp; Kiểm tra</span><kbd>1</kbd></button>
+          <button class="ins-screen" data-action="go" data-target="result"><span class="ins-code">02</span><span class="ins-label">Kết quả kiểm tra</span><kbd>2</kbd></button>
+          <button class="ins-screen" data-action="go" data-target="report"><span class="ins-code">03</span><span class="ins-label">Báo cáo lừa đảo</span><kbd>3</kbd></button>
+          <button class="ins-screen" data-action="go" data-target="learn"><span class="ins-code">04</span><span class="ins-label">Bài học 01 phút</span><kbd>4</kbd></button>
+          <button class="ins-screen" data-action="go" data-target="quiz"><span class="ins-code">05</span><span class="ins-label">Bài kiểm tra nhận diện</span><kbd>5</kbd></button>
+          <button class="ins-screen" data-action="go" data-target="volunteer"><span class="ins-code">06</span><span class="ins-label">Dashboard tình nguyện</span><kbd>6</kbd></button>
+        </nav>
+      </section>
 
-      <div class="inspector-group">
-        <h3>3. Kiểm thử mức độ cảnh báo (Màn 02)</h3>
-        <div class="btn-row-3">
-          <button class="ins-pill danger" onclick="setRiskLevel('danger')">Nguy hiểm</button>
-          <button class="ins-pill warning" onclick="setRiskLevel('warning')">Nghi ngờ</button>
-          <button class="ins-pill safe" onclick="setRiskLevel('safe')">An toàn</button>
+      <section class="ins-group">
+        <h2 class="ins-title"><span class="ins-num">2</span>Chế độ thích ứng</h2>
+        <button class="ins-switch" role="switch" aria-checked="false" data-action="toggle-senior">
+          <span class="ins-switch-text"><strong>Người cao tuổi (A+)</strong><small>Chữ 19–24px · nút ≥ 56px · ẩn chi tiết phụ</small></span>
+          <span class="switch" aria-hidden="true"><span class="switch-knob"></span></span>
+        </button>
+        <button class="ins-switch" role="switch" aria-checked="false" data-action="toggle-offline">
+          <span class="ins-switch-text"><strong>Giả lập mất mạng</strong><small>Banner cảnh báo · dữ liệu trên máy · SMS</small></span>
+          <span class="switch" aria-hidden="true"><span class="switch-knob"></span></span>
+        </button>
+      </section>
+
+      <section class="ins-group">
+        <h2 class="ins-title"><span class="ins-num">3</span>Mức kết quả · Màn 02</h2>
+        <div class="ins-levels" role="radiogroup" aria-label="Mức cảnh báo">
+          <button class="ins-level is-active" role="radio" aria-checked="true" data-action="set-level" data-level="danger"><i class="lv-dot lv-danger"></i>Nguy hiểm</button>
+          <button class="ins-level" role="radio" aria-checked="false" data-action="set-level" data-level="warning"><i class="lv-dot lv-warning"></i>Nghi ngờ</button>
+          <button class="ins-level" role="radio" aria-checked="false" data-action="set-level" data-level="safe"><i class="lv-dot lv-safe"></i>An toàn</button>
         </div>
-      </div>
+      </section>
 
-      <div class="inspector-group">
-        <h3>4. Kiểm thử Trạng thái Lỗi / Trống</h3>
-        <div class="btn-grid">
-          <button class="ins-btn outline" onclick="triggerInputError()">Lỗi nhập sai định dạng</button>
-          <button class="ins-btn outline" onclick="openFamilyModal(true)">Trống danh sách người thân</button>
+      <section class="ins-group">
+        <h2 class="ins-title"><span class="ins-num">4</span>Trạng thái biên</h2>
+        <button class="ins-action" data-action="edge-error">
+          <span class="ins-action-icon is-red"><svg class="ic"><use href="#i-alert-circle"/></svg></span>
+          <span class="ins-switch-text"><strong>Lỗi nhập sai định dạng</strong><small>Nhập “09123” rồi bấm Kiểm tra</small></span>
+          <svg class="ic ins-chev"><use href="#i-chevron-right"/></svg>
+        </button>
+        <button class="ins-switch" role="switch" aria-checked="false" data-action="toggle-empty">
+          <span class="ins-switch-text"><strong>Trống danh sách người thân</strong><small>Mở bottom sheet ở Empty State</small></span>
+          <span class="switch" aria-hidden="true"><span class="switch-knob"></span></span>
+        </button>
+      </section>
+
+      <section class="ins-group">
+        <h2 class="ins-title"><span class="ins-num">5</span>Trình bày &amp; nộp bài</h2>
+        <button class="ins-gallery-btn" data-action="gallery">
+          <svg class="ic"><use href="#i-grid"/></svg>
+          <span><strong>Xem tất cả màn hình</strong><small>Gallery View · xuất PDF</small></span>
+          <kbd>G</kbd>
+        </button>
+      </section>
+    </div>
+
+    <footer class="ins-foot">
+      <p>Phím tắt: <kbd>1</kbd>–<kbd>6</kbd> màn hình · <kbd>A</kbd> A+ · <kbd>O</kbd> mất mạng · <kbd>Esc</kbd> đóng</p>
+    </footer>
+  </aside>
+
+  <button class="ins-fab" id="insFab" aria-label="Mở Prototype Inspector"><svg class="ic"><use href="#i-sliders"/></svg></button>
+
+  <!-- =========================================================
+       STAGE – Khung điện thoại 390 × 844
+       ========================================================= -->
+  <main class="stage" id="stage">
+    <div class="stage-head">
+      <span class="stage-code" id="stageCode">01_TrangChu</span>
+      <span class="stage-title" id="stageTitle">Trang chủ &amp; Kiểm tra nhanh</span>
+    </div>
+
+    <div class="device-wrap" id="deviceWrap">
+      <div class="device" id="device">
+        <!-- Thanh trạng thái -->
+        <div class="statusbar" aria-hidden="true">
+          <span class="sb-time" data-ref="clock">9:41</span>
+          <span class="sb-island"></span>
+          <span class="sb-icons">
+            <svg class="sb-signal" viewBox="0 0 18 12"><rect x="0" y="8" width="3" height="4" rx="1"/><rect x="5" y="5.5" width="3" height="6.5" rx="1"/><rect x="10" y="3" width="3" height="9" rx="1"/><rect x="15" y="0" width="3" height="12" rx="1" class="sb-dim"/></svg>
+            <svg class="ic sb-wifi only-online"><use href="#i-wifi"/></svg>
+            <svg class="ic sb-wifi only-offline"><use href="#i-wifi-off"/></svg>
+            <svg class="sb-battery" viewBox="0 0 27 13"><rect x=".5" y=".5" width="23" height="12" rx="3.5" fill="none" stroke="currentColor" opacity=".4"/><rect x="2" y="2" width="16" height="9" rx="2"/><path d="M25 4.5v4c.8-.3 1.5-1.1 1.5-2s-.7-1.7-1.5-2Z" opacity=".45"/></svg>
+          </span>
         </div>
-      </div>
-    </aside>
 
-    <!-- KHUNG ĐIỆN THOẠI MÔ PHỎNG (390x844px) -->
-    <main class="stage">
-      <div class="phone-frame" id="phoneFrame">
-        <!-- TOP BAR -->
-        <header class="app-header">
-          <div class="brand">
-            <span class="brand-icon">🛡️</span>
-            <span class="brand-name">Lá Chắn Số</span>
-          </div>
-          <div class="header-actions">
-            <button class="chip-senior" id="btnSeniorMode" title="Chế độ người cao tuổi">
-              A+ Người lớn
-            </button>
-          </div>
+        <!-- Top bar -->
+        <header class="topbar">
+          <button class="brand" data-action="go" data-target="home" aria-label="Lá Chắn Số – Về trang chủ">
+            <span class="brand-mark"><svg class="ic"><use href="#i-shield-check"/></svg></span>
+            <span class="brand-text"><strong>Lá Chắn Số</strong><small>Công dân số Đồng Nai</small></span>
+          </button>
+          <button class="a11y-toggle" role="switch" aria-checked="false" data-action="toggle-senior" aria-label="Chế độ người cao tuổi">
+            <span class="a11y-aa">A<sup>+</sup></span>
+            <span class="a11y-label">Cao tuổi</span>
+            <span class="switch switch-sm" aria-hidden="true"><span class="switch-knob"></span></span>
+          </button>
         </header>
 
-        <!-- BANNER MẤT MẠNG (OFFLINE) -->
-        <div class="offline-banner hidden" id="offlineBanner">
-          <span>⚠️ <strong>Mất kết nối mạng</strong> • Đang dùng bộ nhớ an toàn trên máy</span>
+        <!-- Banner ngoại tuyến -->
+        <div class="offline-banner only-offline" role="status">
+          <svg class="ic"><use href="#i-wifi-off"/></svg>
+          <p><strong>Bạn đang ngoại tuyến.</strong> <span>Vẫn kiểm tra được bằng dữ liệu an toàn trên máy.</span></p>
         </div>
 
-        <!-- NỘI DUNG CÁC MÀN HÌNH -->
-        <div class="screen-container">
-          <!-- MÀN 01: TRANG CHỦ & KIỂM TRA NHANH -->
-          <section class="screen active" id="screen-home">
-            <div class="hero-card">
-              <h1>Kiểm tra nhanh trước khi chuyển tiền</h1>
-              <p class="subtitle standard-only">
-                Nhập SĐT, số tài khoản, đường dẫn hoặc dán tin nhắn nghi ngờ để AI kiểm tra.
+        <!-- Vùng nội dung cuộn -->
+        <div class="viewport" data-ref="viewport">
+
+          <!-- ============ 01 TRANG CHỦ ============ -->
+          <section class="screen is-active" data-screen="home" aria-label="Trang chủ">
+            <div class="hero">
+              <p class="eyebrow senior-hide"><svg class="ic"><use href="#i-map-pin"/></svg>Đồng Nai · Hôm nay có 18 cảnh báo mới</p>
+              <h1 class="h1">Kiểm tra trước khi tin, <span class="text-primary">xác minh trước khi chuyển tiền.</span></h1>
+            </div>
+
+            <div class="omni card" data-ref="omni">
+              <label class="omni-label" for="omniInput">Dán nội dung bạn nghi ngờ</label>
+              <div class="omni-field" data-ref="omniField">
+                <textarea id="omniInput" data-ref="omniInput" rows="3" placeholder="Số điện thoại, số tài khoản, đường dẫn hoặc nội dung tin nhắn…" aria-describedby="omniError"></textarea>
+                <button class="omni-clear" data-action="clear-input" aria-label="Xoá nội dung"><svg class="ic"><use href="#i-x"/></svg></button>
+
+                <div class="listening" data-ref="listening" aria-live="polite">
+                  <div class="wave" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
+                  <p class="listening-text">Đang nghe… hãy nói nội dung nghi ngờ</p>
+                  <button class="listening-stop" data-action="mic"><svg class="ic ic-fill"><use href="#i-stop"/></svg>Dừng</button>
+                </div>
+                <div class="scan" aria-hidden="true"><span class="scan-line"></span></div>
+              </div>
+
+              <div class="omni-tools">
+                <button class="tool-btn" data-action="paste-sample"><svg class="ic"><use href="#i-clipboard"/></svg>Dán tin mẫu</button>
+                <span class="omni-hint senior-hide">SĐT · STK · Link</span>
+                <button class="mic-btn" data-action="mic" aria-label="Nhập bằng giọng nói"><svg class="ic"><use href="#i-mic"/></svg></button>
+              </div>
+
+              <p class="field-error" id="omniError" data-ref="omniError" role="alert">
+                <svg class="ic"><use href="#i-alert-circle"/></svg><span data-ref="omniErrorText"></span>
               </p>
 
-              <div class="omni-box" id="omniBox">
-                <textarea
-                  id="checkInput"
-                  rows="3"
-                  placeholder="Dán tin nhắn, nhập SĐT, link hoặc số tài khoản..."
-                ></textarea>
-                <div class="omni-tools">
-                  <button class="tool-btn" onclick="pasteSampleText()">📋 Dán tin mẫu</button>
-                  <button class="tool-btn voice" id="btnVoiceInput" onclick="simulateVoiceInput()">
-                    🎙️ Nói để kiểm tra
-                  </button>
+              <button class="btn btn-primary btn-lg btn-block btn-check" data-action="check" data-ref="checkBtn">
+                <span class="btn-label"><svg class="ic"><use href="#i-shield-check"/></svg>Kiểm tra ngay</span>
+                <span class="btn-loading"><span class="spinner"></span>AI đang phân tích…</span>
+              </button>
+            </div>
+
+            <div class="quick senior-hide">
+              <p class="section-label">Thử nhanh tình huống mẫu</p>
+              <div class="chips">
+                <button class="chip" data-action="quick" data-sample="police"><i class="lv-dot lv-danger"></i>Giả danh Công an</button>
+                <button class="chip" data-action="quick" data-sample="gift"><i class="lv-dot lv-warning"></i>Link nhận quà</button>
+                <button class="chip" data-action="quick" data-sample="safe"><i class="lv-dot lv-safe"></i>SĐT an toàn</button>
+              </div>
+            </div>
+
+            <div class="sos-card">
+              <div class="sos-top">
+                <span class="sos-icon"><svg class="ic"><use href="#i-users"/></svg></span>
+                <div>
+                  <h2 class="sos-title">Đang bị hối thúc chuyển tiền?</h2>
+                  <p class="sos-desc">Dừng lại 1 phút. Gửi ngay cho người thân để cùng xác minh.</p>
                 </div>
               </div>
-              <p class="error-msg hidden" id="inputErrorMsg">
-                ⚠️ Định dạng chưa hợp lệ. Vui lòng nhập SĐT, số tài khoản hoặc dán nội dung tin nhắn.
-              </p>
-
-              <button class="btn-primary full-width" onclick="runCheck()">
-                🔍 Kiểm tra ngay
-              </button>
-
-              <!-- Gợi ý thử nhanh (ẩn ở chế độ người lớn tuổi để tối giản) -->
-              <div class="quick-chips standard-only">
-                <button class="q-chip" onclick="fillAndCheck('danger')">Thử: Giả danh Công an</button>
-                <button class="q-chip" onclick="fillAndCheck('warning')">Thử: Link nhận quà</button>
-                <button class="q-chip" onclick="fillAndCheck('safe')">Thử: SĐT an toàn</button>
-              </div>
+              <button class="btn btn-sos btn-lg btn-block" data-action="open-family"><svg class="ic"><use href="#i-phone"/></svg>Hỏi người thân ngay</button>
             </div>
 
-            <!-- Khối nút lớn ưu tiên cho người cao tuổi -->
-            <div class="sos-card">
-              <div>
-                <strong>Đang bối rối hoặc bị thúc giục?</strong>
-                <p>Bấm gửi cảnh báo ngay cho người thân đã chỉ định.</p>
-              </div>
-              <button class="btn-sos full-width" onclick="openFamilyModal(false)">
-                📞 Hỏi người thân ngay
-              </button>
-            </div>
-          </section>
-
-          <!-- MÀN 02: KẾT QUẢ KIỂM TRA (3 MỨC ĐỘ + OFFLINE) -->
-          <section class="screen" id="screen-result">
-            <div class="result-card danger" id="resultCard">
-              <div class="result-badge" id="resultBadge">🛡️ NGUY HIỂM</div>
-              <h2 id="resultTitle">Có dấu hiệu lừa đảo rõ rệt</h2>
-              <p class="result-meta" id="resultMeta">Phân tích bởi AI • Cập nhật hôm nay</p>
-
-              <ul class="reason-list" id="resultReasons">
-                <li>Cơ quan Công an <strong>không làm việc</strong> hoặc yêu cầu chuyển tiền qua điện thoại.</li>
-                <li>Phát hiện từ khóa thúc giục: <em>"chuyển tiền gấp", "tạm giữ tài khoản"</em>.</li>
-                <li>Số điện thoại trùng khớp với <strong>12 lượt báo cáo</strong> tại địa phương.</li>
-              </ul>
-
-              <button class="btn-audio full-width" id="btnSpeakResult" onclick="toggleSpeak()">
-                🔊 Nghe đọc cảnh báo
-              </button>
-            </div>
-
-            <div class="offline-note hidden" id="offlineResultNote">
-              <strong>Lưu ý ngoại tuyến:</strong> Chưa thể quét sâu bằng AI do mất mạng. Tuyệt đối KHÔNG chuyển tiền lúc này.
-            </div>
-
-            <div class="action-stack">
-              <button class="btn-sos full-width" onclick="openFamilyModal(false)">
-                📞 Hỏi người thân (Hỗ trợ gọi/SMS)
-              </button>
-              <button class="btn-secondary full-width" onclick="navigateTo('report')">
-                🚨 Báo cáo & Chuyển kênh Công an
-              </button>
-              <button class="btn-text full-width" onclick="navigateTo('home')">
-                ← Kiểm tra nội dung khác
-              </button>
-            </div>
-          </section>
-
-          <!-- MÀN 03: BÁO CÁO LỪA ĐẢO -->
-          <section class="screen" id="screen-report">
-            <h2 class="screen-title">Báo cáo trường hợp lừa đảo</h2>
-            <div class="step-indicator">Bước 1: Chọn loại • Bước 2: Nội dung • Bước 3: Gửi</div>
-
-            <div class="type-grid">
-              <button class="type-card active" onclick="selectReportType(this)">📞 Cuộc gọi</button>
-              <button class="type-card" onclick="selectReportType(this)">💬 Tin nhắn</button>
-              <button class="type-card" onclick="selectReportType(this)">🔗 Đường dẫn</button>
-              <button class="type-card" onclick="selectReportType(this)">🏦 Số tài khoản</button>
-            </div>
-
-            <div class="form-group">
-              <label>Nội dung / SĐT / Link nghi ngờ</label>
-              <textarea rows="3" placeholder="Nhập thông tin đối tượng lừa đảo (dữ liệu giả lập)..."></textarea>
-            </div>
-
-            <label class="switch-card">
-              <div>
-                <strong>Gửi đồng thời kênh Công an</strong>
-                <small>Chuyển tiếp dữ liệu tới kênh tiếp nhận tin báo địa phương</small>
-              </div>
-              <input type="checkbox" checked />
-            </label>
-
-            <button class="btn-primary full-width" id="btnSubmitReport" onclick="submitReport()">
-              Gửi báo cáo ngay
+            <button class="trend-card senior-hide" data-action="go" data-target="volunteer">
+              <span class="trend-icon"><svg class="ic"><use href="#i-flame"/></svg></span>
+              <span class="trend-body"><strong>Cảnh báo nóng: giả danh nhân viên điện lực</strong><small>Phường Tam Hiệp · 15 phút trước</small></span>
+              <svg class="ic trend-chev"><use href="#i-chevron-right"/></svg>
             </button>
           </section>
 
-          <!-- MÀN 04: BÀI HỌC 01 PHÚT (DẠNG THẺ LẬT) -->
-          <section class="screen" id="screen-learn">
-            <h2 class="screen-title">Bài học 01 phút theo tình huống</h2>
-            <p class="subtitle">Chạm vào thẻ để lật xem dấu hiệu nhận biết & cách xử lý.</p>
-
-            <div class="flip-card" id="flipCard" onclick="this.classList.toggle('flipped')">
-              <div class="flip-inner">
-                <div class="flip-front">
-                  <span class="tag-pill">Tình huống 01/10</span>
-                  <div class="card-emoji">👮‍♂️⚠️</div>
-                  <h3>Giả danh Công an yêu cầu chuyển tiền</h3>
-                  <p>Gọi điện đe dọa liên quan vụ án, yêu cầu chuyển tiền vào "tài khoản tạm giữ" để xác minh.</p>
-                  <span class="tap-hint">👆 Chạm để xem cách phòng tránh</span>
-                </div>
-                <div class="flip-back">
-                  <span class="tag-pill safe">Cách xử lý trong 30 giây</span>
-                  <ul>
-                    <li><strong>1. Cúp máy ngay:</strong> Không tranh cãi, không làm theo hướng dẫn.</li>
-                    <li><strong>2. Không chuyển tiền:</strong> Công an không bao giờ làm việc qua điện thoại.</li>
-                    <li><strong>3. Kiểm chứng:</strong> Bấm nút "Hỏi người thân" hoặc gọi Công an xã/phường.</li>
-                  </ul>
-                  <span class="tap-hint">👆 Chạm để lật lại</span>
-                </div>
+          <!-- ============ 02 KẾT QUẢ ============ -->
+          <section class="screen" data-screen="result" aria-label="Kết quả kiểm tra">
+            <div class="screen-head">
+              <button class="icon-btn" data-action="go" data-target="home" aria-label="Quay lại"><svg class="ic"><use href="#i-chevron-left"/></svg></button>
+              <div>
+                <h2 class="h2">Kết quả kiểm tra</h2>
+                <p class="meta">Vừa xong <span class="offline-tag only-offline">(Ngoại tuyến)</span></p>
               </div>
             </div>
 
-            <div class="mini-list">
-              <div class="mini-item">🎁 Đường dẫn nhận quà tri ân <span>1 phút</span></div>
-              <div class="mini-item">💼 Tuyển CTV "việc nhẹ lương cao" <span>1 phút</span></div>
-              <div class="mini-item">🏥 Người thân gặp tai nạn cần tiền gấp <span>1 phút</span></div>
-            </div>
-          </section>
-
-          <!-- MÀN 05: KIỂM TRA NHẬN DIỆN (QUIZ) -->
-          <section class="screen" id="screen-quiz">
-            <div class="quiz-header">
-              <span class="tag-pill">Câu hỏi 1/5</span>
-              <span class="quiz-score" id="quizScore">Điểm: 0</span>
-            </div>
-
-            <div class="mock-sms">
-              <div class="sms-sender">Người lạ (+84 9xx.xxx.xxx)</div>
-              <div class="sms-bubble" id="smsBubble">
-                Chào bạn! Bên mình tuyển CTV đặt đơn hàng online tại nhà,
-                <span class="hl-clue">việc nhẹ lương cao 500k/ngày</span>. Bấm ngay link
-                <span class="hl-clue">bit.ly/nhan-viec-gap</span> để nhận thưởng!
+            <div class="verdict" data-ref="verdict" data-level="danger">
+              <div class="verdict-icon">
+                <span class="verdict-ring" aria-hidden="true"></span>
+                <svg class="ic"><use data-ref="verdictIcon" href="#i-shield-alert"/></svg>
+              </div>
+              <span class="verdict-badge" data-ref="verdictBadge">Nguy hiểm</span>
+              <h3 class="verdict-title" data-ref="verdictTitle">Có dấu hiệu lừa đảo rõ rệt</h3>
+              <p class="verdict-sub" data-ref="verdictSub">Không chuyển tiền, không cung cấp mã OTP.</p>
+              <div class="meter senior-hide" aria-hidden="true">
+                <div class="meter-track"><span class="meter-knob" data-ref="meterKnob"></span></div>
+                <div class="meter-scale"><span>An toàn</span><span>Nghi ngờ</span><span>Nguy hiểm</span></div>
               </div>
             </div>
 
-            <div class="quiz-actions">
-              <button class="btn-danger" onclick="answerQuiz(true)">🚨 LỪA ĐẢO</button>
-              <button class="btn-safe" onclick="answerQuiz(false)">✅ AN TOÀN</button>
+            <div class="card checked">
+              <div class="card-row">
+                <p class="card-label">Nội dung đã kiểm tra</p>
+                <span class="type-chip senior-hide" data-ref="checkedType"><svg class="ic"><use href="#i-message"/></svg>Tin nhắn</span>
+              </div>
+              <p class="checked-text" data-ref="checkedText"></p>
             </div>
 
-            <div class="quiz-feedback hidden" id="quizFeedback"></div>
+            <div class="card ai-card">
+              <div class="card-row">
+                <h3 class="card-title"><span class="ai-badge"><svg class="ic"><use href="#i-sparkles"/></svg></span>AI giải thích</h3>
+                <span class="conf senior-hide" data-ref="conf">Độ tin cậy 96%</span>
+              </div>
+              <ul class="reasons" data-ref="reasons"></ul>
+
+              <button class="listen" data-action="listen" data-ref="listen" aria-pressed="false">
+                <span class="listen-icon">
+                  <svg class="ic idle-only"><use href="#i-volume"/></svg>
+                  <svg class="ic ic-fill play-only"><use href="#i-stop"/></svg>
+                </span>
+                <span class="listen-body">
+                  <span class="idle-only listen-text">Nghe đọc cảnh báo</span>
+                  <span class="play-only listen-text">Đang đọc cảnh báo…</span>
+                  <span class="listen-progress play-only"><span data-ref="listenBar"></span></span>
+                </span>
+                <span class="wave wave-sm play-only" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></span>
+                <span class="listen-time idle-only">0:18</span>
+              </button>
+            </div>
+
+            <div class="notice only-offline">
+              <span class="notice-icon"><svg class="ic"><use href="#i-database"/></svg></span>
+              <div>
+                <strong>Kiểm tra bằng bộ nhớ an toàn trên máy</strong>
+                <p>Dữ liệu cập nhật lúc 06:00 hôm nay nên có thể chưa đầy đủ. <b>Tuyệt đối không chuyển tiền</b> cho đến khi xác minh lại.</p>
+              </div>
+            </div>
+
+            <div class="action-bar">
+              <button class="btn btn-sos btn-lg btn-block" data-action="open-family"><svg class="ic"><use href="#i-users"/></svg>Hỏi người thân</button>
+              <button class="btn btn-outline btn-block" data-action="go" data-target="report"><svg class="ic"><use href="#i-flag"/></svg>Báo cáo &amp; Gửi kênh Công an</button>
+            </div>
           </section>
 
-          <!-- MÀN 06: DASHBOARD ĐỘI TÌNH NGUYỆN -->
-          <section class="screen" id="screen-dashboard">
-            <div class="dash-head">
-              <h2 class="screen-title">Thống kê Đội tình nguyện</h2>
-              <span class="tag-pill">Đồng Nai • Tháng 11</span>
+          <!-- ============ 03 BÁO CÁO ============ -->
+          <section class="screen" data-screen="report" aria-label="Báo cáo lừa đảo">
+            <div class="screen-head">
+              <button class="icon-btn" data-action="go" data-target="result" aria-label="Quay lại"><svg class="ic"><use href="#i-chevron-left"/></svg></button>
+              <div>
+                <h2 class="h2">Báo cáo lừa đảo</h2>
+                <p class="meta">Mất khoảng 30 giây · Ẩn danh</p>
+              </div>
+            </div>
+
+            <ol class="stepper" data-ref="stepper" aria-label="Tiến trình báo cáo">
+              <li class="step is-active" data-step="1"><span class="step-dot"><b>1</b><svg class="ic"><use href="#i-check"/></svg></span><span class="step-label">Chọn loại</span></li>
+              <li class="step" data-step="2"><span class="step-dot"><b>2</b><svg class="ic"><use href="#i-check"/></svg></span><span class="step-label">Thông tin</span></li>
+              <li class="step" data-step="3"><span class="step-dot"><b>3</b><svg class="ic"><use href="#i-check"/></svg></span><span class="step-label">Gửi</span></li>
+            </ol>
+
+            <div class="report-form" data-ref="reportForm">
+              <p class="section-label">Bạn gặp lừa đảo qua hình thức nào?</p>
+              <div class="type-grid" data-ref="typeGrid" role="radiogroup" aria-label="Loại hình lừa đảo">
+                <button class="type-card" role="radio" aria-checked="false" data-action="report-type" data-type="call">
+                  <span class="type-icon"><svg class="ic"><use href="#i-phone"/></svg></span><strong>Cuộc gọi</strong><small class="senior-hide">Gọi thoại, video</small>
+                  <span class="type-check"><svg class="ic"><use href="#i-check"/></svg></span>
+                </button>
+                <button class="type-card" role="radio" aria-checked="false" data-action="report-type" data-type="sms">
+                  <span class="type-icon"><svg class="ic"><use href="#i-message"/></svg></span><strong>Tin nhắn</strong><small class="senior-hide">SMS, mạng xã hội</small>
+                  <span class="type-check"><svg class="ic"><use href="#i-check"/></svg></span>
+                </button>
+                <button class="type-card" role="radio" aria-checked="false" data-action="report-type" data-type="link">
+                  <span class="type-icon"><svg class="ic"><use href="#i-link"/></svg></span><strong>Đường dẫn</strong><small class="senior-hide">Web, ứng dụng giả</small>
+                  <span class="type-check"><svg class="ic"><use href="#i-check"/></svg></span>
+                </button>
+                <button class="type-card" role="radio" aria-checked="false" data-action="report-type" data-type="bank">
+                  <span class="type-icon"><svg class="ic"><use href="#i-landmark"/></svg></span><strong>Số tài khoản</strong><small class="senior-hide">Ngân hàng, ví</small>
+                  <span class="type-check"><svg class="ic"><use href="#i-check"/></svg></span>
+                </button>
+              </div>
+              <p class="field-error" data-ref="typeError" role="alert"><svg class="ic"><use href="#i-alert-circle"/></svg><span>Vui lòng chọn 1 hình thức lừa đảo ở trên.</span></p>
+
+              <label class="section-label" for="reportText">Nội dung / số điện thoại / đường dẫn</label>
+              <div class="field">
+                <textarea id="reportText" data-ref="reportText" rows="4" placeholder="Mô tả ngắn gọn điều đã xảy ra…"></textarea>
+                <span class="field-foot senior-hide"><svg class="ic"><use href="#i-lock"/></svg>Thông tin cá nhân của bạn được ẩn danh</span>
+              </div>
+
+              <button class="toggle-row" role="switch" aria-checked="true" data-action="toggle-forward" data-ref="forwardToggle">
+                <span class="toggle-icon"><svg class="ic"><use href="#i-shield"/></svg></span>
+                <span class="toggle-text"><strong>Chuyển tiếp đồng thời tới kênh tiếp nhận tin báo của Công an</strong><small class="senior-hide">Giúp xử lý nhanh hơn tại xã/phường</small></span>
+                <span class="switch" aria-hidden="true"><span class="switch-knob"></span></span>
+              </button>
+
+              <button class="btn btn-primary btn-lg btn-block" data-action="report-submit" data-ref="reportSubmit">
+                <span class="btn-label">
+                  <span class="only-online"><svg class="ic"><use href="#i-send"/></svg>Gửi báo cáo</span>
+                  <span class="only-offline"><svg class="ic"><use href="#i-save"/></svg>Lưu tạm (Tự gửi khi có mạng)</span>
+                </span>
+                <span class="btn-loading"><span class="spinner"></span>Đang xử lý…</span>
+              </button>
+            </div>
+
+            <div class="report-done" data-ref="reportDone">
+              <div class="done-icon"><svg class="ic only-online"><use href="#i-check"/></svg><svg class="ic only-offline"><use href="#i-clock"/></svg></div>
+              <h3 class="h2 only-online">Đã gửi báo cáo thành công</h3>
+              <h3 class="h2 only-offline">Đã lưu tạm báo cáo</h3>
+              <p class="done-text only-online">Mã tiếp nhận <b>#DN-2411-0482</b>. Cảm ơn bạn đã góp phần bảo vệ cộng đồng Đồng Nai.</p>
+              <p class="done-text only-offline">Báo cáo sẽ <b>tự động gửi</b> ngay khi điện thoại có mạng trở lại. Bạn không cần làm gì thêm.</p>
+              <div class="done-meta" data-ref="doneMeta"><svg class="ic"><use href="#i-shield"/></svg>Đã chuyển tiếp tới kênh tiếp nhận của Công an</div>
+              <button class="btn btn-primary btn-block" data-action="go" data-target="home"><svg class="ic"><use href="#i-shield-check"/></svg>Về trang Kiểm tra</button>
+              <button class="btn btn-ghost btn-block" data-action="report-reset">Gửi báo cáo khác</button>
+            </div>
+          </section>
+
+          <!-- ============ 04 BÀI HỌC ============ -->
+          <section class="screen" data-screen="learn" aria-label="Bài học 1 phút">
+            <div class="screen-head screen-head-plain">
+              <div>
+                <h2 class="h2">Bài học 01 phút</h2>
+                <p class="meta">Chạm vào thẻ để xem cách xử lý</p>
+              </div>
+              <span class="progress-pill senior-hide" data-ref="learnProgress"><svg class="ic"><use href="#i-star"/></svg>3/12 bài</span>
+            </div>
+
+            <div class="flip" data-ref="flip">
+              <button class="flip-inner" data-action="flip" aria-label="Lật thẻ bài học" data-ref="flipInner">
+                <span class="flip-face flip-front">
+                  <span class="flip-tag"><svg class="ic"><use href="#i-flame"/></svg><span data-ref="lessonTag">Phổ biến nhất tại Đồng Nai</span></span>
+                  <span class="flip-art" aria-hidden="true">
+                    <span class="flip-art-ring"></span>
+                    <svg class="ic"><use data-ref="lessonIcon" href="#i-phone"/></svg>
+                  </span>
+                  <span class="flip-kicker">Tình huống</span>
+                  <strong class="flip-title" data-ref="lessonTitle">Giả danh Công an yêu cầu chuyển tiền</strong>
+                  <span class="flip-quote" data-ref="lessonQuote"></span>
+                  <span class="flip-hint"><svg class="ic"><use href="#i-rotate"/></svg>Chạm để xem cách xử lý</span>
+                </span>
+                <span class="flip-face flip-back">
+                  <span class="flip-back-head">
+                    <span class="flip-kicker flip-kicker-dark">Cách xử lý</span>
+                    <span class="timer-chip"><svg class="ic"><use href="#i-clock"/></svg>30 giây</span>
+                  </span>
+                  <strong class="flip-back-title">3 bước xử lý trong 30 giây</strong>
+                  <span class="flip-steps" data-ref="lessonSteps"></span>
+                  <span class="flip-hint flip-hint-dark"><svg class="ic"><use href="#i-rotate"/></svg>Chạm để lật lại</span>
+                </span>
+              </button>
+            </div>
+
+            <div class="lesson-list-head">
+              <p class="section-label">Tình huống phổ biến khác</p>
+            </div>
+            <div class="lesson-list" data-ref="lessonList"></div>
+          </section>
+
+          <!-- ============ 05 QUIZ ============ -->
+          <section class="screen" data-screen="quiz" aria-label="Bài kiểm tra nhận diện">
+            <div class="quiz-top">
+              <div class="quiz-progress-wrap">
+                <p class="quiz-count" data-ref="quizCount">Câu 1/5</p>
+                <div class="quiz-bars" data-ref="quizBars"><i></i><i></i><i></i><i></i><i></i></div>
+              </div>
+              <span class="score-badge" data-ref="scoreBadge"><svg class="ic"><use href="#i-star"/></svg><b data-ref="scoreVal">0</b>&nbsp;điểm</span>
+            </div>
+
+            <div class="quiz-body" data-ref="quizBody">
+              <p class="quiz-q">Tin nhắn dưới đây là lừa đảo hay an toàn?</p>
+
+              <div class="sms">
+                <div class="sms-head">
+                  <span class="sms-avatar" data-ref="smsAvatar">?</span>
+                  <span class="sms-who"><strong data-ref="smsSender">+84 857 ••• 219</strong><small data-ref="smsSub">Không có trong danh bạ</small></span>
+                </div>
+                <div class="sms-thread">
+                  <span class="sms-time" data-ref="smsTime">Hôm nay 08:15</span>
+                  <div class="bubble" data-ref="smsBubble"></div>
+                </div>
+              </div>
+
+              <div class="answer-row" data-ref="answerRow">
+                <button class="answer answer-scam" data-action="answer" data-choice="scam"><svg class="ic"><use href="#i-shield-alert"/></svg>LỪA ĐẢO</button>
+                <button class="answer answer-safe" data-action="answer" data-choice="safe"><svg class="ic"><use href="#i-shield-check"/></svg>AN TOÀN</button>
+              </div>
+
+              <div class="explain" data-ref="explain" aria-live="polite">
+                <div class="explain-head">
+                  <span class="explain-icon"><svg class="ic"><use data-ref="explainIcon" href="#i-check"/></svg></span>
+                  <strong data-ref="explainTitle">Chính xác!</strong>
+                  <span class="plus" data-ref="plus">+20</span>
+                </div>
+                <p class="explain-text" data-ref="explainText"></p>
+                <button class="btn btn-primary btn-block" data-action="quiz-next"><span data-ref="nextLabel">Câu tiếp theo</span><svg class="ic"><use href="#i-arrow-right"/></svg></button>
+              </div>
+            </div>
+
+            <div class="quiz-done" data-ref="quizDone">
+              <div class="done-trophy"><svg class="ic"><use href="#i-trophy"/></svg></div>
+              <h3 class="h2">Hoàn thành bài kiểm tra!</h3>
+              <p class="done-score"><b data-ref="doneScore">80</b>/100 điểm</p>
+              <p class="done-text" data-ref="doneText">Bạn nhận diện tốt các chiêu lừa phổ biến.</p>
+              <button class="btn btn-primary btn-block" data-action="quiz-restart"><svg class="ic"><use href="#i-rotate"/></svg>Làm lại bài kiểm tra</button>
+              <button class="btn btn-ghost btn-block" data-action="go" data-target="learn">Xem lại bài học 1 phút</button>
+            </div>
+          </section>
+
+          <!-- ============ 06 TÌNH NGUYỆN ============ -->
+          <section class="screen" data-screen="volunteer" aria-label="Dashboard đội tình nguyện">
+            <div class="screen-head screen-head-plain">
+              <div>
+                <h2 class="h2">Đội tình nguyện</h2>
+                <p class="meta"><svg class="ic"><use href="#i-map-pin"/></svg>Biên Hòa · Đồng Nai</p>
+              </div>
+              <span class="period-chip">Tháng 11</span>
             </div>
 
             <div class="kpi-grid">
-              <div class="kpi-card">
-                <span class="kpi-num">120</span>
-                <span class="kpi-label">Lượt báo cáo / tháng</span>
+              <div class="kpi kpi-blue">
+                <span class="kpi-icon"><svg class="ic"><use href="#i-flag"/></svg></span>
+                <p class="kpi-value">120</p>
+                <p class="kpi-label">lượt báo cáo/tháng</p>
+                <span class="kpi-trend senior-hide"><svg class="ic"><use href="#i-trending-up"/></svg>+18% so với T10</span>
               </div>
-              <div class="kpi-card highlight">
-                <span class="kpi-num">35%</span>
-                <span class="kpi-label">Đường dẫn giả mạo</span>
-              </div>
-            </div>
-
-            <!-- Biểu đồ thanh ngang tối giản -->
-            <div class="chart-card">
-              <h3>Tỷ lệ kiểu lừa đảo tại địa phương</h3>
-              <div class="bar-row">
-                <span>Đường dẫn giả mạo</span>
-                <div class="bar-track"><div class="bar-fill red" style="width: 35%"></div></div>
-                <strong>35%</strong>
-              </div>
-              <div class="bar-row">
-                <span>Giả danh Công an / Ngân hàng</span>
-                <div class="bar-track"><div class="bar-fill amber" style="width: 28%"></div></div>
-                <strong>28%</strong>
-              </div>
-              <div class="bar-row">
-                <span>Việc nhẹ lương cao (CTV)</span>
-                <div class="bar-track"><div class="bar-fill blue" style="width: 22%"></div></div>
-                <strong>22%</strong>
-              </div>
-              <div class="bar-row">
-                <span>Khác (Quà tặng, tai nạn...)</span>
-                <div class="bar-track"><div class="bar-fill gray" style="width: 15%"></div></div>
-                <strong>15%</strong>
+              <div class="kpi kpi-red">
+                <span class="kpi-icon"><svg class="ic"><use href="#i-link"/></svg></span>
+                <p class="kpi-value">35%</p>
+                <p class="kpi-label">đường dẫn giả mạo</p>
+                <span class="kpi-trend kpi-trend-up senior-hide"><svg class="ic"><use href="#i-trending-up"/></svg>Chiếm tỉ lệ cao nhất</span>
               </div>
             </div>
 
-            <button class="btn-secondary full-width" onclick="showToast('Đã tạo ảnh cảnh báo nhanh để chia sẻ Zalo xã/phường')">
-              📤 Xuất tờ rơi tuyên truyền nhanh
+            <div class="card chart-card">
+              <div class="card-row">
+                <h3 class="card-title">Kiểu lừa đảo mới tại địa phương</h3>
+                <span class="meta senior-hide">120 báo cáo</span>
+              </div>
+              <div class="donut-wrap">
+                <svg class="donut" viewBox="0 0 140 140" data-ref="donut" role="img" aria-label="Biểu đồ phân bổ kiểu lừa đảo">
+                  <circle class="donut-bg" cx="70" cy="70" r="52"/>
+                </svg>
+                <div class="donut-center" aria-hidden="true">
+                  <b data-ref="donutValue">35%</b>
+                  <span data-ref="donutLabel">Đường dẫn giả mạo</span>
+                </div>
+              </div>
+              <ul class="legend" data-ref="legend"></ul>
+            </div>
+
+            <div class="hot-head">
+              <h3 class="card-title"><span class="hot-dot"></span>Cảnh báo nóng tại xã/phường</h3>
+            </div>
+            <ul class="hot-list">
+              <li class="hot-item">
+                <span class="hot-sev sev-danger"><svg class="ic"><use href="#i-phone"/></svg></span>
+                <span class="hot-body"><strong>Giả danh nhân viên điện lực đòi tiền điện</strong><small><svg class="ic"><use href="#i-map-pin"/></svg>Phường Tam Hiệp · 15 phút trước</small></span>
+                <span class="badge-new">Mới</span>
+              </li>
+              <li class="hot-item">
+                <span class="hot-sev sev-warning"><svg class="ic"><use href="#i-link"/></svg></span>
+                <span class="hot-body"><strong>Link giả cổng dịch vụ công nhận trợ cấp</strong><small><svg class="ic"><use href="#i-map-pin"/></svg>Xã Long Thành · 2 giờ trước</small></span>
+                <span class="badge-new">Mới</span>
+              </li>
+              <li class="hot-item">
+                <span class="hot-sev sev-warning"><svg class="ic"><use href="#i-briefcase"/></svg></span>
+                <span class="hot-body"><strong>Tuyển CTV chốt đơn hoàn tiền 30%</strong><small><svg class="ic"><use href="#i-map-pin"/></svg>Phường Hố Nai · Hôm qua</small></span>
+              </li>
+              <li class="hot-item">
+                <span class="hot-sev sev-danger"><svg class="ic"><use href="#i-shield-alert"/></svg></span>
+                <span class="hot-body"><strong>Gọi video giả danh Công an “xác minh”</strong><small><svg class="ic"><use href="#i-map-pin"/></svg>Xã Trảng Bom · Hôm qua</small></span>
+              </li>
+            </ul>
+
+            <button class="btn btn-primary btn-lg btn-block" data-action="export-poster" data-ref="exportBtn">
+              <span class="btn-label"><svg class="ic"><use href="#i-image"/></svg>Xuất ảnh tuyên truyền nhanh</span>
+              <span class="btn-loading"><span class="spinner"></span>Đang tạo ảnh…</span>
             </button>
           </section>
         </div>
 
-        <!-- BOTTOM NAVIGATION BAR (4 MỤC) -->
-        <nav class="bottom-nav">
-          <button class="nav-item active" data-goto="home">
-            <span class="nav-ico">🔍</span><span>Kiểm tra</span>
-          </button>
-          <button class="nav-item" data-goto="learn">
-            <span class="nav-ico">📚</span><span>Bài học</span>
-          </button>
-          <button class="nav-item" data-goto="quiz">
-            <span class="nav-ico">🎯</span><span>Thi thử</span>
-          </button>
-          <button class="nav-item" data-goto="dashboard">
-            <span class="nav-ico">📊</span><span>Tình nguyện</span>
-          </button>
+        <!-- Bottom navigation -->
+        <nav class="tabbar" aria-label="Điều hướng chính">
+          <button class="tab is-active" data-action="go" data-target="home" data-tab="check"><span class="tab-icon"><svg class="ic"><use href="#i-shield-check"/></svg></span><span class="tab-label">Kiểm tra</span></button>
+          <button class="tab" data-action="go" data-target="learn" data-tab="learn"><span class="tab-icon"><svg class="ic"><use href="#i-book"/></svg></span><span class="tab-label">Bài học</span></button>
+          <button class="tab" data-action="go" data-target="quiz" data-tab="quiz"><span class="tab-icon"><svg class="ic"><use href="#i-clipboard-check"/></svg></span><span class="tab-label">Thi thử</span></button>
+          <button class="tab" data-action="go" data-target="volunteer" data-tab="volunteer"><span class="tab-icon"><svg class="ic"><use href="#i-hand-heart"/></svg></span><span class="tab-label">Tình nguyện</span></button>
+          <span class="home-indicator" aria-hidden="true"></span>
         </nav>
 
-        <!-- BOTTOM SHEET: HỎI NGƯỜI THÂN (CÓ TRẠNG THÁI TRỐNG) -->
-        <div class="modal-backdrop hidden" id="familyModal">
-          <div class="bottom-sheet">
-            <div class="sheet-handle"></div>
-            <h3>Hỏi ý kiến người thân</h3>
+        <!-- Bottom sheet -->
+        <div class="sheet-layer" data-ref="sheetLayer" aria-hidden="true">
+          <div class="sheet-backdrop" data-action="close-sheet"></div>
+          <div class="sheet" role="dialog" aria-modal="true" aria-label="Hỏi người thân" data-ref="sheet" data-mode="family">
+            <span class="sheet-handle" aria-hidden="true"></span>
 
-            <!-- Trạng thái có dữ liệu -->
-            <div id="familyListView">
-              <p class="subtitle">Chạm để gửi nhanh cảnh báo hoặc gọi trực tiếp:</p>
-              <button class="contact-item" onclick="sendFamilyAlert('Con gái (Minh Anh)')">
+            <!-- Chế độ: Hỏi người thân -->
+            <div class="sheet-pane pane-family">
+              <div class="sheet-head">
                 <div>
-                  <strong>Con gái (Minh Anh)</strong>
-                  <small>090x.xxx.123 • <span class="offline-call-tag">Gọi/SMS không cần mạng</span></small>
+                  <h3 class="sheet-title">Hỏi người thân</h3>
+                  <p class="sheet-desc">Gửi nội dung vừa kiểm tra để người thân xác minh cùng bạn.</p>
                 </div>
-                <span class="contact-action">Gửi ngay</span>
-              </button>
-              <button class="contact-item" onclick="sendFamilyAlert('Con trai (Hoàng Nam)')">
-                <div>
-                  <strong>Con trai (Hoàng Nam)</strong>
-                  <small>091x.xxx.456 • <span class="offline-call-tag">Gọi/SMS không cần mạng</span></small>
+                <button class="icon-btn icon-btn-soft" data-action="close-sheet" aria-label="Đóng"><svg class="ic"><use href="#i-x"/></svg></button>
+              </div>
+
+              <span class="offline-chip only-offline"><svg class="ic"><use href="#i-message"/></svg>Hỗ trợ gọi/SMS không cần mạng</span>
+
+              <div class="family-filled">
+                <div class="share-preview senior-hide">
+                  <span class="lv-dot" data-ref="shareDot"></span>
+                  <p><small>Nội dung gửi kèm</small><span data-ref="shareText"></span></p>
                 </div>
-                <span class="contact-action">Gửi ngay</span>
-              </button>
+                <ul class="family-list">
+                  <li class="family-row">
+                    <button class="fr-main" data-action="send-family" data-name="Minh Anh" data-rel="Con gái">
+                      <span class="avatar av-1">MA</span>
+                      <span class="fr-body"><strong>Minh Anh</strong><small>Con gái · 0908 •••214</small></span>
+                      <span class="fr-send" aria-label="Gửi cảnh báo"><svg class="ic"><use href="#i-send"/></svg><span>Gửi</span></span>
+                    </button>
+                    <button class="fr-call" data-action="call-family" data-name="Minh Anh" aria-label="Gọi Minh Anh"><svg class="ic"><use href="#i-phone"/></svg></button>
+                  </li>
+                  <li class="family-row">
+                    <button class="fr-main" data-action="send-family" data-name="Hoàng Nam" data-rel="Con trai">
+                      <span class="avatar av-2">HN</span>
+                      <span class="fr-body"><strong>Hoàng Nam</strong><small>Con trai · 0977 •••586</small></span>
+                      <span class="fr-send" aria-label="Gửi cảnh báo"><svg class="ic"><use href="#i-send"/></svg><span>Gửi</span></span>
+                    </button>
+                    <button class="fr-call" data-action="call-family" data-name="Hoàng Nam" aria-label="Gọi Hoàng Nam"><svg class="ic"><use href="#i-phone"/></svg></button>
+                  </li>
+                </ul>
+                <button class="btn btn-ghost btn-block senior-hide" data-action="add-family"><svg class="ic"><use href="#i-plus"/></svg>Thêm người thân khác</button>
+              </div>
+
+              <div class="family-empty">
+                <svg class="empty-art" viewBox="0 0 160 112" aria-hidden="true">
+                  <circle cx="80" cy="56" r="52" fill="#EFF6FF"/>
+                  <circle cx="62" cy="44" r="13" fill="#fff" stroke="#93C5FD" stroke-width="2.5"/>
+                  <path d="M38 86c0-13 10.7-22 24-22s24 9 24 22" fill="#fff" stroke="#93C5FD" stroke-width="2.5" stroke-linecap="round"/>
+                  <circle cx="100" cy="48" r="11" fill="#fff" stroke="#CBD5E1" stroke-width="2.5" stroke-dasharray="4 4"/>
+                  <path d="M80 86c0-11 9-19 20-19s20 8 20 19" fill="none" stroke="#CBD5E1" stroke-width="2.5" stroke-dasharray="4 4" stroke-linecap="round"/>
+                  <circle cx="122" cy="30" r="12" fill="#EA580C"/>
+                  <path d="M122 24v12M116 30h12" stroke="#fff" stroke-width="2.5" stroke-linecap="round"/>
+                </svg>
+                <h4 class="empty-title">Chưa có người thân nào</h4>
+                <p class="empty-text">Thêm 1–2 người thân tin cậy để có thể hỏi ý kiến ngay khi gặp cuộc gọi, tin nhắn đáng ngờ.</p>
+                <button class="btn btn-sos btn-lg btn-block" data-action="add-family"><svg class="ic"><use href="#i-user-plus"/></svg>+ Thêm số người thân ngay</button>
+              </div>
             </div>
 
-            <!-- Trạng thái trống (Empty State) -->
-            <div id="familyEmptyView" class="empty-state hidden">
-              <div class="empty-icon">👨‍👩‍👧</div>
-              <strong>Chưa cài đặt số người thân</strong>
-              <p>Thêm ít nhất 01 số điện thoại tin cậy để hỏi nhanh khi gặp cuộc gọi lạ.</p>
-              <button class="btn-primary full-width" onclick="openFamilyModal(false)">
-                + Thêm số người thân ngay
-              </button>
+            <!-- Chế độ: Ảnh tuyên truyền -->
+            <div class="sheet-pane pane-poster">
+              <div class="sheet-head">
+                <div>
+                  <h3 class="sheet-title">Ảnh tuyên truyền</h3>
+                  <p class="sheet-desc">Tạo tự động từ cảnh báo nóng · khổ 4:5</p>
+                </div>
+                <button class="icon-btn icon-btn-soft" data-action="close-sheet" aria-label="Đóng"><svg class="ic"><use href="#i-x"/></svg></button>
+              </div>
+              <div class="poster">
+                <div class="poster-top">
+                  <span class="poster-brand"><svg class="ic"><use href="#i-shield-check"/></svg>Lá Chắn Số</span>
+                  <span class="poster-tag">Cảnh báo nóng</span>
+                </div>
+                <p class="poster-title">Giả danh nhân viên điện lực đòi tiền điện</p>
+                <ul class="poster-tips">
+                  <li><svg class="ic"><use href="#i-phone-off"/></svg>Không thanh toán qua link lạ</li>
+                  <li><svg class="ic"><use href="#i-ban"/></svg>Điện lực không cắt điện “trong 2 giờ”</li>
+                  <li><svg class="ic"><use href="#i-users"/></svg>Hỏi người thân trước khi chuyển tiền</li>
+                </ul>
+                <p class="poster-foot"><svg class="ic"><use href="#i-map-pin"/></svg>Phường Tam Hiệp · Đồng Nai</p>
+              </div>
+              <div class="poster-actions">
+                <button class="btn btn-outline" data-action="poster-share"><svg class="ic"><use href="#i-share"/></svg>Chia sẻ</button>
+                <button class="btn btn-primary" data-action="poster-save"><svg class="ic"><use href="#i-download"/></svg>Lưu ảnh</button>
+              </div>
             </div>
-
-            <button class="btn-text full-width" onclick="closeFamilyModal()">Đóng</button>
           </div>
         </div>
 
-        <!-- TOAST THÔNG BÁO -->
-        <div class="toast hidden" id="toast"></div>
+        <!-- Toast -->
+        <div class="toast-host" data-ref="toastHost" aria-live="polite"></div>
       </div>
-    </main>
-  </div>
+    </div>
 
-  <script src="script.js"></script>
+    <p class="stage-foot"><svg class="ic"><use href="#i-smartphone"/></svg>390 × 844 · Mobile-first · Dữ liệu giả lập</p>
+  </main>
+
+  <!-- =========================================================
+       GALLERY VIEW (Xem tất cả màn hình / xuất PDF)
+       ========================================================= -->
+  <section class="gallery" id="gallery" hidden aria-label="Tất cả màn hình">
+    <header class="gallery-bar">
+      <div>
+        <p class="gallery-kicker">Lá Chắn Số · Hackathon UX/UI · Vòng sơ loại</p>
+        <h1 class="gallery-title">Toàn bộ màn hình &amp; trạng thái</h1>
+        <p class="gallery-meta" id="galleryMeta"></p>
+      </div>
+      <div class="gallery-actions">
+        <button class="g-btn" data-action="print"><svg class="ic"><use href="#i-printer"/></svg>Xuất PDF</button>
+        <button class="g-btn g-btn-primary" data-action="gallery"><svg class="ic"><use href="#i-smartphone"/></svg>Về chế độ Prototype</button>
+      </div>
+    </header>
+    <div class="g-grid" id="galleryGrid"></div>
+  </section>
+</div>
+
+<script src="script.js"></script>
 </body>
 </html>
