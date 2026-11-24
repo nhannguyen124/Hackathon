@@ -1,36 +1,36 @@
 # Lá Chắn Số – Prototype phòng chống lừa đảo trực tuyến (Đồng Nai)
 
-Clickable prototype mobile-first cho vòng sơ loại Hackathon UX/UI.
+Ứng dụng web mobile-first hỗ trợ kiểm tra nhanh, gửi báo cáo đa kênh, tổng hợp danh sách cảnh báo trên máy chủ và kiểm duyệt báo cáo cho cán bộ cơ sở.
 
 ## Chạy nhanh (chế độ demo)
 
-Mở trực tiếp `index.html` bằng trình duyệt. Mọi màn hình đều bấm được; quét tệp và gửi báo cáo chạy bằng dữ liệu mẫu và được ghi rõ là **demo** trên giao diện.
+Mở trực tiếp `index.html` bằng trình duyệt. Mọi màn hình đều tương tác đầy đủ; đối chiếu danh sách cảnh báo, quét tệp, đọc báo cáo bằng giọng nói và kiểm duyệt hoạt động ngay trên dữ liệu mẫu.
 
-## Chạy đầy đủ (VirusTotal + cơ sở dữ liệu)
+## Chạy đầy đủ với máy chủ (`server.js` + SQLite / JSON + VirusTotal)
 
 Yêu cầu Node.js 18 trở lên, không cần `npm install`.
 
 ```bash
-cp .env.example .env      # điền VIRUSTOTAL_API_KEY (và ADMIN_TOKEN nếu cần)
+cp .env.example .env      # tuỳ chọn điền VIRUSTOTAL_API_KEY, ADMIN_TOKEN
 npm start                 # mở http://localhost:3000
 ```
 
-- **Quét tệp**: trình duyệt gửi tệp (≤ 32 MB) tới `server.js`; máy chủ tra cứu mã SHA-256 trên VirusTotal, nếu tệp chưa có thì tải lên để phân tích. Khoá API chỉ nằm trên máy chủ, không bao giờ gửi xuống trình duyệt. Lưu ý: tệp tải lên VirusTotal có thể được chia sẻ với cộng đồng bảo mật.
-- **Báo cáo lừa đảo**: lưu vào SQLite (`data/reports.db`, dùng `node:sqlite` có sẵn từ Node 22.5); Node cũ hơn sẽ tự lưu vào `data/reports.json`. Khi mất mạng, báo cáo được giữ trên máy và tự gửi khi có mạng lại (không bị trùng nhờ `clientId`).
+- **Giao diện vừa khít màn hình điện thoại**: Trang 1 tinh gọn trên một màn hình đơn, không cần cuộn dài.
+- **Báo cáo đa kênh**: Gửi tới **Người thân**, **Cán bộ / Công an xã phường**, hoặc gửi **Số điện thoại, Trang web, Mã file độc (SHA-256), Tài khoản** lên **Máy chủ** để tự động tổng hợp vào **Danh sách cảnh báo**.
+- **Bài học & Thi thử gộp gọn**: Chuyển đổi mượt ngay trong cùng một trang kỹ năng.
+- **Chế độ Người cao tuổi tối giản**: Không chỉ tăng cỡ chữ mà ẩn triệt để các tính năng kỹ thuật không cần thiết (quét mã băm, thi thử chấm điểm, kiểm duyệt cán bộ, cấu hình máy chủ), chỉ giữ kiểm tra, giọng nói và gọi/nhắn người thân 1 chạm.
+- **Đọc báo cáo khi kiểm tra & kiểm duyệt**: Xem toàn văn hồ sơ báo cáo và phát giọng đọc tiếng Việt (Text-to-Speech) cả ở màn hình Kết quả kiểm tra lẫn màn hình Cán bộ kiểm duyệt.
 
 ### API
 
 | Phương thức | Đường dẫn | Mô tả |
 |---|---|---|
-| GET | `/api/health` | Trạng thái máy chủ, đã có khoá VirusTotal chưa, loại cơ sở dữ liệu |
-| POST | `/api/scan` | Thân yêu cầu là nội dung tệp; header `X-File-Name` |
-| GET | `/api/scan/:id` | Hỏi kết quả phân tích đang chờ |
-| POST | `/api/reports` | `{ type, content, forwardPolice, riskLevel, clientId }` |
-| GET | `/api/reports` | Danh sách báo cáo – cần header `x-admin-token` |
-| GET | `/api/stats` | Tổng số báo cáo theo loại |
-
-## Cấu trúc
-
-- `index.html`, `style.css`, `script.js` – giao diện (HTML/CSS/JS thuần, font Be Vietnam Pro)
-- `server.js` – máy chủ API không phụ thuộc thư viện ngoài
-- `.env.example` – mẫu cấu hình (tệp `.env` và thư mục `data/` không được commit)
+| GET | `/api/health` | Trạng thái máy chủ, khoá VirusTotal, loại cơ sở dữ liệu |
+| POST | `/api/scan` | Quét tệp (≤ 32 MB) qua VirusTotal |
+| GET | `/api/scan/:id` | Hỏi kết quả phân tích tệp đang chờ |
+| POST | `/api/reports` | Gửi báo cáo (`type: phone\|web\|malware\|bank\|sms`, `targetValue`, `fileHash`, `channels`, `ward`, `content`) |
+| GET | `/api/reports` | Danh sách báo cáo phục vụ kiểm tra, kiểm duyệt |
+| PATCH | `/api/reports/:id` | Cán bộ kiểm duyệt báo cáo (`verified` / `dismissed` + ghi chú) |
+| GET | `/api/watchlist` | Danh sách cảnh báo tổng hợp trên máy chủ |
+| GET | `/api/lookup?q=...` | Đối chiếu nhanh nội dung kiểm tra với danh sách cảnh báo |
+| GET | `/api/stats` | Thống kê tổng hợp số lượng báo cáo |
