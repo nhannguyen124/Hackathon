@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8" />
+<title>Bản thuyết minh – Lá Chắn Số</title>
+<link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+<style>
+  @page { size: A4; margin: 11mm 14mm; }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: "Be Vietnam Pro", system-ui, sans-serif; font-size: 9.2pt; line-height: 1.42; color: #0F172A; }
+  header { display: flex; justify-content: space-between; align-items: flex-end; border-bottom: 2px solid #1E40AF; padding-bottom: 8px; margin-bottom: 10px; }
+  h1 { font-size: 17pt; font-weight: 800; color: #1E40AF; letter-spacing: -.02em; line-height: 1.2; }
+  .sub { font-size: 9pt; color: #475569; }
+  .team { text-align: right; font-size: 9pt; color: #334155; line-height: 1.7; }
+  .team b { display: inline-block; min-width: 110px; border-bottom: 1px dotted #64748B; }
+  h2 { font-size: 11pt; font-weight: 700; color: #1E40AF; margin: 9px 0 4px; break-after: avoid; }
+  h3 { font-size: 9.8pt; font-weight: 700; margin: 7px 0 3px; }
+  p { margin-bottom: 5px; }
+  ul, ol { padding-left: 17px; margin-bottom: 5px; }
+  li { margin-bottom: 2px; }
+  table { width: 100%; border-collapse: collapse; margin: 4px 0 6px; font-size: 9pt; }
+  th, td { border: 1px solid #CBD5E1; padding: 3px 6px; text-align: left; vertical-align: top; }
+  th { background: #EFF6FF; color: #1E3A8A; font-weight: 700; }
+  .flow { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; margin: 4px 0 6px; font-size: 8.8pt; }
+  .flow span { border: 1px solid #93C5FD; background: #EFF6FF; border-radius: 6px; padding: 3px 7px; font-weight: 600; }
+  .flow i { color: #64748B; font-style: normal; }
+  .arch { display: grid; grid-template-columns: 1fr auto 1fr auto 1fr; gap: 6px; align-items: center; margin: 6px 0; font-size: 8.8pt; text-align: center; }
+  .box { border: 1.5px solid #1E40AF; border-radius: 8px; padding: 6px; background: #F8FAFC; }
+  .box b { display: block; color: #1E40AF; }
+  .note { font-size: 8.6pt; color: #475569; }
+  .tag { display: inline-block; font-size: 8pt; font-weight: 700; border-radius: 4px; padding: 0 5px; }
+  .p0 { background: #FEE2E2; color: #991B1B; } .p1 { background: #FEF3C7; color: #92400E; } .p2 { background: #E2E8F0; color: #334155; }
+  .page-break { break-before: page; }
+</style>
+</head>
+<body>
+
+<header>
+  <div>
+    <h1>BẢN THUYẾT MINH – LÁ CHẮN SỐ</h1>
+    <p class="sub">Ứng dụng web (ưu tiên điện thoại) giúp người dân Đồng Nai kiểm tra, cảnh báo và báo cáo lừa đảo trực tuyến<br>Cuộc thi Hackathon thành phố Đồng Nai 2026 – Vòng sơ loại – Thiết kế UX/UI</p>
+  </div>
+  <div class="team">Đội: <b>&nbsp;</b><br>Đề số: <b>&nbsp;</b></div>
+</header>
+
+<h2>(a) Vấn đề và người dùng</h2>
+<p><b>Vấn đề.</b> Các chiêu lừa đảo qua điện thoại và mạng (giả danh Công an, đường dẫn “nhận quà tri ân”, tuyển cộng tác viên “việc nhẹ lương cao”, “người thân gặp tai nạn cần tiền gấp”, tệp .apk giả mạo) đều đánh vào tâm lý <b>hối thúc</b>. Trong vài phút bị thúc ép, nạn nhân thường không có ai để hỏi, không biết số hay đường dẫn đó đã từng bị người khác báo cáo chưa, và không biết báo cho ai. Thông tin cảnh báo hiện rời rạc, chưa gắn với địa phương.</p>
+<table>
+  <tr><th style="width:24%">Nhóm người dùng</th><th>Nhu cầu chính</th><th style="width:34%">Thiết kế đáp ứng</th></tr>
+  <tr><td><b>Người cao tuổi</b> (người dùng ưu tiên)</td><td>Ít rành công nghệ, mắt kém; cần làm ít bước, có người thân xác minh giúp ngay.</td><td>Chế độ <b>Người cao tuổi (A+)</b>: chữ 19–24px, nút ≥ 56px, chỉ 3 tab, đọc to cảnh báo; nút cam “Hỏi người thân”.</td></tr>
+  <tr><td><b>Người dân phổ thông</b> (học sinh, nội trợ, người lao động)</td><td>Kiểm tra nhanh một tin nhắn, số điện thoại, đường dẫn hoặc tệp lạ.</td><td>Một ô nhập duy nhất; kết quả 3 màu kèm 3 lý do dễ hiểu; bài học 1 phút và thi thử.</td></tr>
+  <tr><td><b>Đội tình nguyện, cán bộ xã/phường</b></td><td>Tiếp nhận, xác minh báo cáo; tuyên truyền theo địa bàn.</td><td>Tab <b>Tình nguyện</b>: duyệt báo cáo, danh sách cảnh báo, biểu đồ, xuất ảnh tuyên truyền.</td></tr>
+</table>
+<p><b>Giải pháp.</b> Một ứng dụng web 4 việc: <b>Kiểm tra – Hỏi người thân – Báo cáo – Học</b>. Báo cáo của người dân được cán bộ <b>kiểm duyệt</b> trước khi vào danh sách cảnh báo chung, nên khi người khác kiểm tra cùng số/đường dẫn sẽ thấy ngay “N báo cáo đã được kiểm duyệt”.</p>
+
+<h2>(b) Luồng sử dụng chính</h2>
+<p><b>Luồng chính (trình diễn trên prototype):</b></p>
+<div class="flow">
+  <span>01 Trang chủ: dán tin nhắn / SĐT / link / chọn tệp</span><i>→</i>
+  <span>Kiểm tra ngay (hiệu ứng quét)</span><i>→</i>
+  <span>02 Kết quả: Đỏ / Vàng / Xanh + 3 lý do + báo cáo cộng đồng</span><i>→</i>
+  <span>03 Hỏi người thân (SMS/gọi, không cần Internet)</span><i>→</i>
+  <span>04 Gửi báo cáo (điền sẵn, chọn nơi nhận)</span><i>→</i>
+  <span>07 Cán bộ duyệt → vào danh sách cảnh báo</span>
+</div>
+<ol>
+  <li><b>Kiểm tra:</b> người dùng dán nội dung nghi ngờ (hoặc nói qua micro, hoặc chọn tệp). Lỗi nhập sai được báo ngay kèm cách sửa (VD: “09123” chưa đủ 10 chữ số).</li>
+  <li><b>Kết quả:</b> thẻ màu đèn giao thông có biểu tượng khiên; 3 lý do tô đậm từ khoá lừa đảo; số báo cáo đã duyệt từ cộng đồng; nút “Nghe đọc cảnh báo”. Khi mất mạng có nhãn “(Ngoại tuyến)” và lưu ý không chuyển tiền.</li>
+  <li><b>Hỏi người thân:</b> khung trượt từ dưới lên, chọn người thân để gửi tin nhắn cảnh báo kèm nội dung vừa kiểm tra hoặc gọi ngay. Chưa có người thân thì hiện màn trống với nút “+ Thêm số người thân ngay”.</li>
+  <li><b>Báo cáo:</b> 3 bước (Chọn loại → Thông tin → Gửi): số điện thoại, trang web, tệp độc hại (lấy mã SHA-256 ngay trên máy), số tài khoản; gửi tới danh sách cảnh báo cộng đồng, cán bộ/Công an xã-phường và/hoặc người thân. Mất mạng thì “Lưu tạm (Tự gửi khi có mạng)”.</li>
+  <li><b>Kiểm duyệt:</b> cán bộ đọc toàn văn báo cáo, bấm Duyệt/Từ chối. Chỉ báo cáo đã duyệt mới được hiển thị công khai.</li>
+</ol>
+<p><b>Luồng phụ:</b> 05 Bài học 1 phút (thẻ lật: tình huống → 3 bước xử lý trong 30 giây) và 06 Thi thử (5 tin nhắn mô phỏng, chọn LỪA ĐẢO/AN TOÀN, tô đỏ chi tiết bẫy); 08 Cài đặt (bảo vệ chạy ngầm, chế độ A+, quản lý người thân).</p>
+<p><b>Danh sách màn hình trong tệp PDF:</b> 01_TrangChu, 02_KetQua (3 mức + quét tệp), 03_HoiNguoiThan (+ trạng thái trống), 04_BaoCao (+ hoàn tất, lưu tạm), 05_BaiHoc, 06_ThiThu, 07_TinhNguyen (+ kiểm duyệt, ảnh tuyên truyền), 08_CaiDat (+ form người thân) – tổng 21 màn hình/trạng thái.</p>
+<p><b>Thiết kế:</b> phong cách tin cậy – tối giản; màu chủ đạo xanh dương <b>#1E40AF</b>, hệ màu đèn giao thông cho mức rủi ro, cam <b>#EA580C</b> cho hành động khẩn cấp; phông Be Vietnam Pro; icon SVG nét (không dùng emoji); tương phản chữ theo WCAG AA; vùng bấm lớn, nút khẩn cấp đặt gần ngón cái.</p>
+<p><b>Prototype bấm được:</b> thư mục <b>prototype/</b> trong bài nộp – mở <b>index.html</b> bằng Chrome/Edge (không cần Internet ngoài phông chữ). Thanh “Prototype Inspector” bên trái cho phép chuyển nhanh màn hình, bật chế độ Người cao tuổi, giả lập mất mạng, xem các trạng thái lỗi/trống; phím <b>G</b> mở chế độ xem tất cả màn hình.</p>
+
+<h2>(c) Tính năng sẽ làm trong 24 giờ nếu vào chung kết (MVP)</h2>
+<table>
+  <tr><th style="width:9%">Ưu tiên</th><th style="width:31%">Tính năng</th><th>Phạm vi tối thiểu</th></tr>
+  <tr><td><span class="tag p0">Phải có</span></td><td>Kiểm tra nội dung</td><td>Nhận SĐT/STK/đường dẫn/tin nhắn; phân loại 3 mức bằng bộ luật từ khoá + đối chiếu danh sách cảnh báo; hiển thị 3 lý do.</td></tr>
+  <tr><td><span class="tag p0">Phải có</span></td><td>Hỏi người thân</td><td>Lưu 1–5 người thân trên máy; mở SMS soạn sẵn và cuộc gọi (<i>sms:</i>, <i>tel:</i>) – hoạt động không cần Internet.</td></tr>
+  <tr><td><span class="tag p0">Phải có</span></td><td>Gửi báo cáo + lưu máy chủ</td><td>4 loại báo cáo, kiểm tra định dạng, chuẩn hoá SĐT/đường dẫn để gộp trùng; lưu cơ sở dữ liệu.</td></tr>
+  <tr><td><span class="tag p0">Phải có</span></td><td>Kiểm duyệt &amp; danh sách cảnh báo</td><td>Cán bộ đăng nhập bằng mã, duyệt/từ chối; chỉ báo cáo đã duyệt mới hiện khi người khác kiểm tra.</td></tr>
+  <tr><td><span class="tag p0">Phải có</span></td><td>Chế độ Người cao tuổi</td><td>Chữ lớn, nút lớn, ẩn chức năng phụ, chỉ giữ Kiểm tra – Bài học – Báo cáo.</td></tr>
+  <tr><td><span class="tag p1">Nên có</span></td><td>Quét tệp (VirusTotal)</td><td>Tra mã SHA-256, tệp mới thì gửi phân tích; hiển thị số công cụ phát hiện.</td></tr>
+  <tr><td><span class="tag p1">Nên có</span></td><td>Ngoại tuyến</td><td>Banner mất mạng; lưu tạm báo cáo và tự gửi lại khi có mạng (không trùng, không mất).</td></tr>
+  <tr><td><span class="tag p1">Nên có</span></td><td>Đọc to cảnh báo; Bài học &amp; Thi thử</td><td>Giọng đọc có sẵn của trình duyệt; 4 bài học, 5 câu thi thử (dữ liệu tĩnh).</td></tr>
+  <tr><td><span class="tag p2">Để sau</span></td><td>AI phân tích tin nhắn, chạy ngầm, số liệu thật</td><td>Cần mô hình ngôn ngữ, ứng dụng cài đặt (native) và dữ liệu từ cơ quan chức năng – ngoài phạm vi 24 giờ.</td></tr>
+</table>
+<p class="note">Tính khả thi: các luồng Phải có/Nên có đã có bản chạy thử (máy chủ Node.js + SQLite) trong quá trình thiết kế, nên 24 giờ tập trung hoàn thiện giao diện, dữ liệu mẫu địa phương và kiểm thử trên điện thoại thật.</p>
+
+<h2>(d) Kiến trúc và công nghệ dự kiến</h2>
+<div class="arch">
+  <div class="box"><b>Ứng dụng web</b>HTML/CSS/JS thuần, mobile-first<br>Lưu người thân, cài đặt, hàng đợi báo cáo trên máy</div>
+  <div>⇄<br><span class="note">REST/JSON</span></div>
+  <div class="box"><b>Máy chủ Node.js</b>/api/lookup · /api/reports<br>/api/moderation · /api/warnings · /api/scan</div>
+  <div>⇄</div>
+  <div class="box"><b>SQLite</b> (báo cáo, trạng thái duyệt)<br><b style="margin-top:4px">VirusTotal API v3</b> (quét tệp)</div>
+</div>
+<ul>
+  <li><b>Giao diện:</b> HTML/CSS/JavaScript thuần, không cần bước build; thiết kế theo token màu/chữ thống nhất; tương thích màn hình 360–430px, có chế độ thích ứng (A+, ngoại tuyến).</li>
+  <li><b>Máy chủ:</b> Node.js dùng thư viện có sẵn (không phụ thuộc gói ngoài); CSDL SQLite, tự chuyển sang tệp JSON nếu môi trường không hỗ trợ.</li>
+  <li><b>Phân tích:</b> MVP dùng bộ luật từ khoá + danh sách cảnh báo đã kiểm duyệt; quét tệp qua VirusTotal. Giai đoạn sau có thể bổ sung mô hình AI để giải thích tin nhắn.</li>
+  <li><b>Bảo mật &amp; riêng tư:</b> khoá API chỉ nằm trên máy chủ; kiểm duyệt bằng mã quản trị; giới hạn số lần gửi theo địa chỉ; chỉ hiện báo cáo đã duyệt (chống bôi nhọ bằng báo cáo giả); không gửi tên người thân lên máy chủ; báo cáo ẩn danh.</li>
+  <li><b>Triển khai:</b> một máy chủ nhỏ (VPS hoặc máy của đơn vị), truy cập qua trình duyệt điện thoại – người dân không cần cài ứng dụng.</li>
+</ul>
+
+<h2>(e) Công cụ trí tuệ nhân tạo đã dùng</h2>
+<table>
+  <tr><th style="width:24%">Công cụ</th><th>Dùng vào việc gì</th></tr>
+  <tr><td><b>Claude Code</b> (Anthropic)</td><td>
+    <ul>
+      <li>Dựng prototype HTML/CSS/JS theo yêu cầu, bố cục và hệ màu do đội đặt ra; chỉnh giao diện theo góp ý của đội (gọn trang chủ, gộp Thi thử vào Bài học, chế độ Người cao tuổi).</li>
+      <li>Sinh dữ liệu mẫu: tin nhắn lừa đảo mô phỏng, tình huống bài học, câu hỏi thi thử, cảnh báo theo xã/phường (toàn bộ là dữ liệu giả lập, không dùng thông tin cá nhân thật).</li>
+      <li>Viết máy chủ chạy thử (báo cáo, kiểm duyệt, kết nối VirusTotal) để kiểm tra tính khả thi; rà soát lỗi và bảo mật mã nguồn.</li>
+      <li>Xuất tệp PDF các màn hình và soạn bản nháp thuyết minh; đội kiểm tra, chỉnh sửa và chịu trách nhiệm nội dung cuối cùng.</li>
+    </ul>
+  </td></tr>
+</table>
+<p class="note">Lưu ý: mục “AI giải thích” trong prototype hiển thị nội dung mẫu để minh hoạ trải nghiệm; ứng dụng không gọi mô hình AI khi người dùng kiểm tra.</p>
+
+</body>
+</html>
