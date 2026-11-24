@@ -1,0 +1,13 @@
+{
+  "name": "la-chan-so",
+  "version": "1.1.0",
+  "private": true,
+  "description": "Lá Chắn Số – prototype phòng chống lừa đảo trực tuyến tại Đồng Nai",
+  "main": "server.js",
+  "scripts": {
+    "start": "node --no-warnings server.js"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}
