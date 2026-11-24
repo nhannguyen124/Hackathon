@@ -1,38 +1,39 @@
 # Lá Chắn Số – Prototype phòng chống lừa đảo trực tuyến (Đồng Nai)
 
-Clickable prototype mobile-first cho vòng sơ loại Hackathon UX/UI.
+Ứng dụng web mobile-first hỗ trợ kiểm tra nhanh, gửi báo cáo đa kênh, tổng hợp danh sách cảnh báo trên máy chủ và kiểm duyệt báo cáo cho cán bộ cơ sở.
 
 ## Chạy nhanh (chế độ demo)
 
-Mở trực tiếp `index.html` bằng trình duyệt. Mọi màn hình đều bấm được; quét tệp và gửi báo cáo chạy bằng dữ liệu mẫu và được ghi rõ là **demo** trên giao diện.
+Mở trực tiếp `index.html` bằng trình duyệt. Mọi màn hình đều tương tác đầy đủ; đối chiếu danh sách cảnh báo, quét tệp, đọc báo cáo bằng giọng nói và kiểm duyệt hoạt động ngay trên dữ liệu mẫu.
 
-## Chạy đầy đủ (VirusTotal + cơ sở dữ liệu)
+## Chạy đầy đủ (VirusTotal + cơ sở dữ liệu SQLite / JSON)
 
 Yêu cầu Node.js 18 trở lên, không cần `npm install`.
 
 ```bash
-cp .env.example .env      # điền VIRUSTOTAL_API_KEY (và ADMIN_TOKEN nếu cần)
+cp .env.example .env      # tuỳ chọn điền VIRUSTOTAL_API_KEY, ADMIN_TOKEN
 npm start                 # mở http://localhost:3000
 ```
 
-- **Quét tệp**: trình duyệt gửi tệp (≤ 32 MB) tới `server.js`; máy chủ tra cứu mã SHA-256 trên VirusTotal, nếu tệp chưa có thì tải lên để phân tích. Khoá API chỉ nằm trên máy chủ, không bao giờ gửi xuống trình duyệt. Lưu ý: tệp tải lên VirusTotal có thể được chia sẻ với cộng đồng bảo mật.
-- **Kiểm duyệt**: cán bộ/tình nguyện viên nhập `ADMIN_TOKEN` ở tab Tình nguyện để đọc và duyệt báo cáo. Chỉ báo cáo đã duyệt (và người gửi chọn chia sẻ cộng đồng) mới vào danh sách cảnh báo và hiện khi người khác kiểm tra.
-- **Báo cáo lừa đảo**: lưu vào SQLite (`data/reports.db`, dùng `node:sqlite` có sẵn từ Node 22.5); Node cũ hơn sẽ tự lưu vào `data/reports.json`. Khi mất mạng, báo cáo được giữ trên máy và tự gửi khi có mạng lại (không bị trùng nhờ `clientId`).
+- **Giao diện vừa khít màn hình điện thoại**: Trang 1 tinh gọn trên một màn hình đơn, không cần cuộn dài; trên thiết bị cảm ứng hỗ trợ mở trực tiếp ứng dụng gọi điện (`tel:`) và nhắn tin (`sms:`).
+- **Báo cáo đa kênh & lưu trữ ngoại tuyến**: Gửi tới **Người thân**, **Cán bộ / Công an xã phường**, hoặc gửi **Số điện thoại, Trang web, Mã file độc (SHA-256), Tài khoản** lên **Máy chủ** để tự động tổng hợp vào **Danh sách cảnh báo** (`data/reports.db` dùng `node:sqlite`, hoặc `data/reports.json`). Khi mất mạng, báo cáo được giữ trên máy và tự đồng bộ khi có mạng lại.
+- **Bài học & Thi thử gộp gọn**: Chuyển đổi mượt giữa Bài học 1 phút và Thi thử nhận diện (5 câu) trong cùng một trang kỹ năng.
+- **Chế độ Người cao tuổi tối giản**: Không chỉ tăng cỡ chữ mà ẩn triệt để các tính năng kỹ thuật không cần thiết (quét mã băm, thi thử chấm điểm, kiểm duyệt cán bộ, cấu hình máy chủ), chỉ giữ kiểm tra, giọng nói và gọi/nhắn người thân 1 chạm.
+- **Đọc báo cáo khi kiểm tra & kiểm duyệt**: Xem toàn văn hồ sơ báo cáo và phát giọng đọc tiếng Việt (Text-to-Speech) cả ở màn hình Kết quả kiểm tra lẫn màn hình Cán bộ kiểm duyệt (hỗ trợ xác thực `ADMIN_TOKEN` qua header `x-admin-token` khi cấu hình).
 
 ### API
 
 | Phương thức | Đường dẫn | Mô tả |
 |---|---|---|
-| GET | `/api/health` | Trạng thái máy chủ, đã có khoá VirusTotal chưa, loại cơ sở dữ liệu |
-| POST | `/api/scan` | Thân yêu cầu là nội dung tệp; header `X-File-Name` |
-| GET | `/api/scan/:id` | Hỏi kết quả phân tích đang chờ |
-| POST | `/api/reports` | `{ type: phone/link/file/bank, target, content, recipients: { server, officials, family }, clientId }` – vào hàng chờ duyệt |
-| GET | `/api/lookup?q=…` | Tra SĐT / đường dẫn / mã tệp / STK: số báo cáo đã duyệt và đang chờ (dùng khi Kiểm tra) |
-| GET | `/api/warnings` | Danh sách cảnh báo cộng đồng (báo cáo đã duyệt, gộp theo đối tượng) |
-| GET | `/api/moderation` | Báo cáo chờ duyệt – cần header `x-admin-token` |
-| POST | `/api/moderation/:id` | `{ action: "approve" \| "reject" }` – cần header `x-admin-token` |
-| GET | `/api/reports` | Toàn bộ báo cáo – cần header `x-admin-token` |
-| GET | `/api/stats` | Tổng số báo cáo theo loại |
+| GET | `/api/health` | Trạng thái máy chủ, khoá VirusTotal, loại cơ sở dữ liệu |
+| POST | `/api/scan` | Thân yêu cầu là nội dung tệp (≤ 32 MB); header `X-File-Name` |
+| GET | `/api/scan/:id` | Hỏi kết quả phân tích tệp đang chờ |
+| POST | `/api/reports` | Gửi báo cáo (`type`, `targetValue`/`target`, `fileHash`, `channels`/`recipients`, `ward`, `content`, `clientId`) |
+| GET | `/api/lookup?q=...` | Đối chiếu nhanh SĐT / trang web / mã file SHA-256 / STK với danh sách cảnh báo |
+| GET | `/api/watchlist` (`/api/warnings`) | Danh sách cảnh báo tổng hợp trên máy chủ |
+| GET | `/api/reports` (`/api/moderation`) | Danh sách báo cáo phục vụ kiểm tra, kiểm duyệt (hỗ trợ `x-admin-token`) |
+| PATCH / POST | `/api/reports/:id` (`/api/moderation/:id`) | Cán bộ kiểm duyệt báo cáo (`verified`/`approve` hoặc `dismissed`/`reject` + ghi chú) |
+| GET | `/api/stats` | Thống kê tổng hợp số lượng báo cáo |
 
 ## Cấu trúc
 
