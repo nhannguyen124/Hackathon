@@ -440,8 +440,9 @@
 
   const normalizeLoose = (v) => {
     const d = v.replace(/[\s.\-()]/g, '');
-    if (/^\+?\d+$/.test(d)) return d.replace(/^\+?84(?=\d{9}$)/, '0');
-    return v.trim().toLowerCase().replace(/^https?:\/\//, '').replace(/^www\./, '').replace(/\/+$/, '');
+    if (/^\+?\d+$/.test(d)) return d.replace(/^\+?84(?=\d{9,10}$)/, '0');
+    // giữ giống normalizeTarget trong server.js
+    return v.trim().toLowerCase().replace(/^https?:\/\//, '').replace(/^www\./, '').replace(/[.,;:!?)"'”’]+$/, '').replace(/\/+$/, '');
   };
 
   async function lookupCommunity(text) {
@@ -1118,20 +1119,46 @@
   }
 
   /* ---------- 11. KẾT QUẢ: NGHE ĐỌC ---------- */
-  const LISTEN_SECONDS = 12;
+  const canSpeak = 'speechSynthesis' in window;
+  let utterance = null;
+
+  function warningSpeech() {
+    const parts = [$(device, 'verdictTitle').textContent, $(device, 'verdictSub').textContent];
+    if ($(device, 'community').classList.contains('is-visible')) parts.push($(device, 'communityTitle').textContent);
+    if (state.resultKind === 'file') parts.push(device.querySelector('.vt-headline').textContent);
+    else parts.push(...$$(device, '[data-ref="reasons"] li').map((li) => li.textContent));
+    return parts.map((t) => t.trim().replace(/[.]+$/, '')).join('. ');
+  }
+
   function startListen() {
-    clearInterval(timers.listen);
+    stopListen();
+    if (!canSpeak) {
+      toast({ type: 'info', title: 'Thiết bị này chưa hỗ trợ đọc to', desc: 'Hãy đọc nội dung cảnh báo trên màn hình.', iconId: 'i-volume' });
+      return;
+    }
+    const text = warningSpeech();
+    const u = new SpeechSynthesisUtterance(text);
+    u.lang = 'vi-VN';
+    u.voice = speechSynthesis.getVoices().find((v) => v.lang.toLowerCase().startsWith('vi')) || null;
+    u.rate = state.senior ? 0.85 : 1;
+    u.onend = u.onerror = () => { if (utterance === u) stopListen(); }; // bỏ qua sự kiện của lần đọc cũ
+    utterance = u;
+    speechSynthesis.speak(u);
+
     ui.listen.classList.add('is-playing');
     ui.listen.setAttribute('aria-pressed', 'true');
     const start = Date.now();
+    const seconds = Math.max(5, text.length / (14 * u.rate)); // ước lượng ~14 ký tự/giây cho thanh tiến trình
     ui.listenBar.style.width = '0%';
     timers.listen = setInterval(() => {
-      const p = Math.min(1, (Date.now() - start) / (LISTEN_SECONDS * 1000));
+      const p = Math.min(1, (Date.now() - start) / (seconds * 1000));
       ui.listenBar.style.width = (p * 100).toFixed(1) + '%';
-      if (p >= 1) stopListen();
+      if (p >= 1 && !speechSynthesis.speaking) stopListen();
     }, 120);
   }
   function stopListen() {
+    utterance = null;
+    if (canSpeak && (speechSynthesis.speaking || speechSynthesis.pending)) speechSynthesis.cancel();
     clearInterval(timers.listen);
     ui.listen.classList.remove('is-playing');
     ui.listen.setAttribute('aria-pressed', 'false');
@@ -1821,6 +1848,9 @@
 
   /* ---------- 19. ACTIONS (event delegation) ---------- */
   const familyById = (id) => state.family.find((f) => f.id === id);
+  // Chỉ mở ứng dụng Điện thoại/Tin nhắn trên thiết bị cảm ứng; trên máy tính (bản trình diễn) chỉ hiện thông báo
+  const isPhone = window.matchMedia('(pointer: coarse)').matches;
+  const smsLink = (phone, body) => `sms:${phone}${/iPhone|iPad|iPod/.test(navigator.userAgent) ? '&' : '?'}body=${encodeURIComponent(body)}`;
 
   const ACTIONS = {
     go: (el) => go(el.dataset.target),
@@ -1897,9 +1927,12 @@
       el.querySelector('.fr-send use').setAttribute('href', '#i-check');
       toast({
         type: 'success',
-        title: `Đã gửi cảnh báo tới ${esc(f.name)} (${esc(f.rel)})${state.offline ? ' qua SMS' : ''}`,
-        desc: `Kèm nội dung: “${esc(truncate(state.checkedText, 70))}”`
+        title: isPhone ? `Đã soạn tin cảnh báo cho ${esc(f.name)} (${esc(f.rel)})` : `Đã gửi cảnh báo tới ${esc(f.name)} (${esc(f.rel)})${state.offline ? ' qua SMS' : ''}`,
+        desc: isPhone ? 'Bấm Gửi trong ứng dụng Tin nhắn. Tin nhắn SMS không cần Internet.' : `Kèm nội dung: “${esc(truncate(state.checkedText, 70))}”`
       });
+      if (isPhone) {
+        location.href = smsLink(f.phone, `Lá Chắn Số cảnh báo (${RESULTS[state.level].badge}): “${truncate(state.checkedText, 300)}”. Gọi lại giúp mình để cùng xác minh nhé.`);
+      }
       setTimeout(closeSheet, 900);
     },
     'call-family': (el) => {
@@ -1911,6 +1944,7 @@
         desc: state.offline ? 'Gọi qua sóng di động thường, không cần Internet.' : 'Cuộc gọi sẽ mở trong ứng dụng Điện thoại.',
         iconId: 'i-phone'
       });
+      if (isPhone) location.href = `tel:${f.phone}`;
     },
     'add-contact': (el) => openContactForm(null, el.dataset.from),
     'edit-contact': (el) => openContactForm(el.dataset.id, 'settings'),

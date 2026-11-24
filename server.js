@@ -217,11 +217,12 @@ function openDatabase() {
 function normalizeTarget(type, raw) {
   const v = String(raw || '').trim();
   const digits = v.replace(/[\s.\-()]/g, '');
-  if (type === 'phone') return /^\+?\d{8,15}$/.test(digits) ? digits.replace(/^\+?84(?=\d{9}$)/, '0') : null;
+  if (type === 'phone') return /^\+?\d{8,15}$/.test(digits) ? digits.replace(/^\+?84(?=\d{9,10}$)/, '0') : null;
   if (type === 'bank') return /^\d{6,19}$/.test(digits) ? digits : null;
   if (type === 'file') return /^([a-f0-9]{32}|[a-f0-9]{40}|[a-f0-9]{64})$/i.test(v) ? v.toLowerCase() : null;
   if (type === 'link') {
-    const u = v.toLowerCase().replace(/^https?:\/\//, '').replace(/^www\./, '').replace(/\/+$/, '');
+    // Bỏ dấu câu dính cuối link khi chép từ câu văn ("...tại trang-gia.top.")
+    const u = v.toLowerCase().replace(/^https?:\/\//, '').replace(/^www\./, '').replace(/[.,;:!?)"'”’]+$/, '').replace(/\/+$/, '');
     return u.length <= 300 && /^[^\s/]+\.[^\s]{2,}$/.test(u) ? u : null;
   }
   return null;
