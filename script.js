@@ -79,9 +79,9 @@
   const SCREENS = {
     home:      { code: '01_TrangChu',   title: 'Trang chủ & Kiểm tra nhanh', tab: 'check' },
     result:    { code: '02_KetQua',     title: 'Kết quả kiểm tra',           tab: 'check' },
-    report:    { code: '04_BaoCao',     title: 'Báo cáo lừa đảo',            tab: 'check' },
+    report:    { code: '04_BaoCao',     title: 'Gửi báo cáo',                tab: 'report' },
     learn:     { code: '05_BaiHoc',     title: 'Bài học 01 phút',            tab: 'learn' },
-    quiz:      { code: '06_Quiz',       title: 'Bài kiểm tra nhận diện',     tab: 'quiz' },
+    quiz:      { code: '06_ThiThu',     title: 'Thi thử (trong Bài học)',    tab: 'learn' },
     volunteer: { code: '07_TinhNguyen', title: 'Dashboard Đội tình nguyện',  tab: 'volunteer' },
     settings:  { code: '08_CaiDat',     title: 'Cài đặt',                    tab: null }
   };
@@ -257,6 +257,36 @@
     ]
   };
 
+  /* Loại báo cáo */
+  const REPORT_TYPES = {
+    phone: { label: 'Số điện thoại', input: 'Số điện thoại lừa đảo', placeholder: '0912 345 678', mode: 'tel', icon: 'i-phone' },
+    link:  { label: 'Trang web', input: 'Đường dẫn trang web giả mạo', placeholder: 'bit.ly/abc hoặc trang-gia.top', mode: 'url', icon: 'i-link' },
+    file:  { label: 'Tệp độc hại', input: 'Mã SHA-256 của tệp', placeholder: 'Bấm “Chọn tệp” để lấy mã', mode: 'text', icon: 'i-file-search' },
+    bank:  { label: 'Số tài khoản', input: 'Số tài khoản nhận tiền lừa', placeholder: '0123 4567 89', mode: 'numeric', icon: 'i-landmark' },
+    call:  { label: 'Cuộc gọi', icon: 'i-phone' },
+    sms:   { label: 'Tin nhắn', icon: 'i-message' }
+  };
+  const URL_IN_TEXT = /(https?:\/\/\S+|www\.\S+|bit\.ly\/\S+|\b[a-z0-9-]+\.(?:com|vn|net|top|xyz|info|link|online|site)\b\S*)/i;
+  const hoursAgo = (h) => new Date(Date.now() - h * 3600e3).toISOString();
+
+  /* Bản demo (không có máy chủ): danh sách cảnh báo & hàng chờ duyệt mẫu */
+  const MOCK_WARNINGS = [
+    { key: '0123456789', approved: 12, pending: 2, lastAt: hoursAgo(2) },
+    { key: 'bit.ly/qua-tri-an-dn', approved: 5, pending: 1, lastAt: hoursAgo(5) },
+    { key: DEMO_FILE_RESULT.sha256, approved: 7, pending: 0, lastAt: hoursAgo(26) }
+  ];
+  const MOCK_PENDING = [
+    { id: 'd1', code: 'DN-2411-0131', type: 'phone', target: '0857 219 446', created_at: hoursAgo(0.3),
+      content: 'Gọi tự xưng cán bộ điện lực, nói nhà tôi nợ tiền điện 2 tháng, đòi chuyển khoản ngay kẻo cắt điện trong 2 giờ.',
+      recipients: { server: true, officials: true, family: 0 } },
+    { id: 'd2', code: 'DN-2411-0129', type: 'link', target: 'dichvucong-hotro.top', created_at: hoursAgo(1.5),
+      content: 'Tin nhắn mời nhận trợ cấp qua cổng dịch vụ công, bấm link thì bắt nhập số thẻ ngân hàng và mã OTP.',
+      recipients: { server: true, officials: false, family: 2 } },
+    { id: 'd3', code: 'DN-2411-0127', type: 'file', target: '4d1f0c9a7be3e2618f5a0b74c9d2e86a1f3b5c7d9e0a2b4c6d8e0f1a3b5c7d9e', created_at: hoursAgo(4),
+      content: 'Tệp “VNeID-capnhat.apk” gửi qua mạng xã hội, cài vào thì máy bị điều khiển từ xa.',
+      recipients: { server: true, officials: true, family: 0 } }
+  ];
+
   /* ---------- 3. TRẠNG THÁI ---------- */
   const state = {
     screen: 'home',
@@ -281,7 +311,7 @@
     file: null,
     scanToken: null,
     reportType: null,
-    forward: true,
+    recipients: { server: true, officials: true, family: false },
     lesson: 0,
     learned: new Set(),
     quizIndex: 0,
@@ -322,6 +352,8 @@
     toastHost: $(device, 'toastHost'),
     reportText: $(device, 'reportText'),
     exportBtn: $(device, 'exportBtn'),
+    reportTarget: $(device, 'reportTarget'),
+    reportFileInput: $(device, 'reportFileInput'),
     contactForm: $(device, 'contactForm'),
     contactName: $(device, 'contactName'),
     contactPhone: $(device, 'contactPhone')
@@ -377,6 +409,70 @@
     return 'safe';
   }
 
+  function relTime(iso) {
+    const m = Math.round((Date.now() - Date.parse(iso)) / 60000);
+    if (!iso || Number.isNaN(m)) return 'không rõ thời gian';
+    if (m < 1) return 'vừa xong';
+    if (m < 60) return `${m} phút trước`;
+    const h = Math.round(m / 60);
+    return h < 24 ? `${h} giờ trước` : `${Math.round(h / 24)} ngày trước`;
+  }
+
+  function validateTarget(type, raw) {
+    const v = raw.trim();
+    if (!v) return `Nhập ${REPORT_TYPES[type].input.toLowerCase()}.`;
+    const digits = v.replace(/[\s.\-()]/g, '');
+    if (type === 'phone' && !/^\+?\d{8,15}$/.test(digits)) return 'Số điện thoại cần 8–15 chữ số (VD: 0912 345 678).';
+    if (type === 'bank' && !/^\d{6,19}$/.test(digits)) return 'Số tài khoản chỉ gồm 6–19 chữ số.';
+    if (type === 'link' && !/^(https?:\/\/)?[^\s/]+\.[^\s]{2,}$/i.test(v)) return 'Đường dẫn chưa đúng. VD: bit.ly/abc hoặc https://trang-gia.top';
+    if (type === 'file' && !/^([a-f0-9]{32}|[a-f0-9]{40}|[a-f0-9]{64})$/i.test(v)) return 'Mã tệp cần là chuỗi SHA-256 (64 ký tự). Bấm “Chọn tệp” để lấy mã tự động.';
+    return null;
+  }
+
+  /* Các giá trị có thể tra trong danh sách cảnh báo: cả nội dung ngắn, mọi đường dẫn và dãy số trong tin nhắn */
+  function lookupCandidates(text) {
+    const t = text.trim();
+    const out = new Set(t.length <= 120 ? [t] : []);
+    (t.match(new RegExp(URL_IN_TEXT.source, 'gi')) || []).forEach((u) => out.add(u));
+    (t.match(/\+?\d[\d\s.\-]{6,22}\d/g) || []).forEach((d) => out.add(d));
+    return [...out].slice(0, 5);
+  }
+
+  const normalizeLoose = (v) => {
+    const d = v.replace(/[\s.\-()]/g, '');
+    if (/^\+?\d+$/.test(d)) return d.replace(/^\+?84(?=\d{9}$)/, '0');
+    return v.trim().toLowerCase().replace(/^https?:\/\//, '').replace(/^www\./, '').replace(/\/+$/, '');
+  };
+
+  async function lookupCommunity(text) {
+    if (state.offline) return null;
+    const qs = lookupCandidates(text);
+    if (!qs.length) return null;
+    if (!api.online) {
+      const keys = qs.map(normalizeLoose);
+      return MOCK_WARNINGS.find((w) => keys.includes(w.key)) || null;
+    }
+    try {
+      return await fetchJSON('/api/lookup?' + qs.map((q) => 'q=' + encodeURIComponent(q)).join('&'), {}, 2500);
+    } catch {
+      return null;
+    }
+  }
+
+  /* Báo cáo đã kiểm duyệt nâng mức cảnh báo: ≥3 → nguy hiểm, ≥1 → ít nhất nghi ngờ */
+  function bumpLevel(level, info) {
+    if (!info) return level;
+    if (info.approved >= 3) return 'danger';
+    if (info.approved >= 1 && level === 'safe') return 'warning';
+    return level;
+  }
+
+  const communityReasons = (info) => [
+    `<mark>${info.approved} người</mark> đã báo cáo nội dung này và báo cáo đã được kiểm duyệt.`,
+    'Đối tượng lừa đảo thường <mark>đổi số, đổi đường dẫn</mark> liên tục để tránh bị phát hiện.',
+    'Không chuyển tiền, không đọc mã OTP. Hãy <strong>hỏi người thân</strong> trước khi làm theo.'
+  ];
+
   /* ---------- 6. RENDERERS (nhận root để dùng lại cho Gallery) ---------- */
   function setScreen(root, key) {
     $$(root, '.screen').forEach((s) => s.classList.toggle('is-active', s.dataset.screen === key));
@@ -404,10 +500,25 @@
     $(root, 'verdictSub').textContent = sub;
   }
 
-  function renderResult(root, level, text) {
+  function renderCommunity(root, info) {
+    const el = $(root, 'community');
+    const show = !!info && (info.approved > 0 || info.pending > 0);
+    el.classList.toggle('is-visible', show);
+    if (!show) return;
+    el.dataset.level = info.approved >= 3 ? 'danger' : 'warning';
+    $(root, 'communityTitle').textContent = info.approved > 0
+      ? `${info.approved} báo cáo đã được kiểm duyệt`
+      : `${info.pending} báo cáo đang chờ kiểm duyệt`;
+    $(root, 'communityText').textContent = info.approved > 0
+      ? `Nội dung này có trong danh sách cảnh báo cộng đồng${info.pending ? `, thêm ${info.pending} báo cáo đang chờ duyệt` : ''}. Lần gần nhất: ${relTime(info.lastAt)}.`
+      : 'Chưa được xác nhận nhưng đã có người cảnh báo. Hãy thận trọng.';
+  }
+
+  function renderResult(root, level, text, reasons) {
     const r = RESULTS[level];
     root.querySelector('[data-screen="result"]').classList.remove('is-file');
-    renderVerdict(root, level, r.title, r.sub);
+    if (reasons) renderVerdict(root, level, level === 'danger' ? 'Nhiều người đã báo cáo lừa đảo' : 'Đã có người báo cáo lừa đảo', 'Không chuyển tiền, không đọc mã OTP cho người lạ.');
+    else renderVerdict(root, level, r.title, r.sub);
 
     const type = detectType(text);
     $(root, 'checkedType').innerHTML = icon(type.icon) + type.label;
@@ -415,7 +526,7 @@
 
     root.querySelector('.ai-card').dataset.level = level;
     $(root, 'conf').textContent = r.conf;
-    $(root, 'reasons').innerHTML = r.reasons.map((h, i) => `<li data-n="${i + 1}">${h}</li>`).join('');
+    $(root, 'reasons').innerHTML = (reasons || r.reasons).map((h, i) => `<li data-n="${i + 1}">${h}</li>`).join('');
     setShare(root, level, text);
   }
 
@@ -651,6 +762,8 @@
         </button>
         <button class="fr-call" data-action="call-family" data-id="${f.id}" aria-label="Gọi ${esc(f.name)}">${icon('i-phone')}</button>
       </li>`).join('');
+    const recip = $(root, 'familyRecipText');
+    if (recip) recip.textContent = family.length ? family.map((f) => f.name).join(', ') : 'Chưa có người thân – thêm trong Cài đặt';
     const more = $(root, 'familyAddMore');
     if (more) more.style.display = family.length >= MAX_FAMILY ? 'none' : '';
   }
@@ -709,6 +822,12 @@
   function selectReportType(root, type) {
     $$(root, '.type-card').forEach((c) => c.setAttribute('aria-checked', String(c.dataset.type === type)));
     $(root, 'typeError').classList.remove('is-visible');
+    const t = REPORT_TYPES[type];
+    $(root, 'targetLabel').textContent = t ? t.input : 'Số điện thoại, đường dẫn hoặc mã tệp';
+    const input = $(root, 'reportTarget');
+    input.placeholder = t ? t.placeholder : 'Chọn loại báo cáo ở trên';
+    input.inputMode = t ? t.mode : 'text';
+    $(root, 'targetWrap').classList.toggle('is-file', type === 'file');
     setStep(root, type ? 2 : 1);
   }
 
@@ -721,31 +840,27 @@
   }
 
   function renderReportDone(root, mode, info = {}) {
-    const panel = $(root, 'reportDone');
-    panel.dataset.mode = mode;
+    $(root, 'reportDone').dataset.mode = mode;
+    const r = info.recipients || { server: true, officials: true, family: [] };
     const code = info.code ? `<b>#${esc(info.code)}</b>` : '';
-    const copy = {
-      sent: {
-        icon: 'i-check', title: 'Đã gửi báo cáo',
-        text: `Mã tiếp nhận ${code}. Cảm ơn bạn đã góp phần bảo vệ cộng đồng Đồng Nai.`,
-        server: 'Đã lưu vào cơ sở dữ liệu máy chủ'
-      },
-      queued: {
-        icon: 'i-clock', title: 'Đã lưu tạm báo cáo',
-        text: 'Báo cáo sẽ <b>tự động gửi</b> ngay khi điện thoại có mạng trở lại. Bạn không cần làm gì thêm.',
-        server: `${info.pending || 1} báo cáo đang chờ gửi`
-      },
-      demo: {
-        icon: 'i-check', title: 'Đã ghi nhận báo cáo',
-        text: `Mã tiếp nhận ${code}. Đây là bản demo nên báo cáo chưa được gửi lên máy chủ.`,
-        server: 'Bản demo – chưa kết nối máy chủ'
-      }
+    const head = {
+      sent: ['i-check', 'Đã gửi báo cáo', `Mã tiếp nhận ${code}. Cảm ơn bạn đã góp phần bảo vệ cộng đồng Đồng Nai.`],
+      queued: ['i-clock', 'Đã lưu tạm báo cáo', 'Báo cáo sẽ <b>tự động gửi</b> khi điện thoại có mạng trở lại. Bạn không cần làm gì thêm.'],
+      demo: ['i-check', 'Đã ghi nhận báo cáo', `Mã tiếp nhận ${code}. Đây là bản demo nên báo cáo chưa được gửi lên máy chủ.`],
+      family: ['i-check', 'Đã gửi cho người thân', 'Người thân sẽ nhận được tin nhắn kèm nội dung bạn báo cáo.']
     }[mode];
-    $(root, 'doneIcon').setAttribute('href', '#' + copy.icon);
-    $(root, 'doneTitle').textContent = copy.title;
-    $(root, 'doneText').innerHTML = copy.text;
-    $(root, 'doneServerText').textContent = copy.server;
-    $(root, 'doneMeta').style.display = info.forward === false ? 'none' : '';
+    $(root, 'doneIcon').setAttribute('href', '#' + head[0]);
+    $(root, 'doneTitle').textContent = head[1];
+    $(root, 'doneText').innerHTML = head[2];
+
+    const wait = mode === 'queued' || mode === 'demo';
+    const later = mode === 'queued' ? 'sẽ gửi khi có mạng' : 'bản demo chưa gửi đi';
+    const items = [];
+    if (r.server) items.push([wait, wait ? `Danh sách cảnh báo cộng đồng: ${later}` : 'Máy chủ đã nhận. Sau khi kiểm duyệt, mọi người sẽ được cảnh báo.']);
+    if (r.officials) items.push([wait, wait ? `Cán bộ, Công an xã/phường: ${later}` : 'Đã chuyển tới cán bộ, Công an xã/phường.']);
+    if (r.family.length) items.push([false, `Đã nhắn tin cho ${r.family.join(', ')}${state.offline ? ' qua SMS' : ''}.`]);
+    $(root, 'doneList').innerHTML = items
+      .map(([w, t]) => `<li class="${w ? 'is-wait' : ''}">${icon(w ? 'i-clock' : 'i-check')}<span>${esc(t)}</span></li>`).join('');
   }
 
   function setReportDone(root, done) {
@@ -761,6 +876,7 @@
     closeSheet();
 
     if (key === 'report') prepareReport();
+    if (key === 'volunteer') { loadModeration(); loadWarnings(); }
     if (key === 'settings') {
       if (state.screen !== 'settings') state.prevScreen = state.screen;
       renderSettings(device, state.settings, state.family);
@@ -811,7 +927,7 @@
   }
 
   /* ---------- 9. TRANG CHỦ: KIỂM TRA VĂN BẢN, MICRO ---------- */
-  function runCheck() {
+  async function runCheck() {
     if (ui.checkBtn.classList.contains('is-loading') || state.scanToken) return;
     if (state.file) { runFileScan(state.file); return; }
     stopMic(false);
@@ -828,17 +944,18 @@
     ui.omni.classList.add('is-scanning');
     ui.checkBtn.classList.add('is-loading');
 
-    timers.check = setTimeout(() => {
-      ui.omni.classList.remove('is-scanning');
-      ui.checkBtn.classList.remove('is-loading');
-      state.level = analyze(value);
-      state.resultKind = 'text';
-      state.checkedText = value;
-      renderResult(device, state.level, value);
-      syncLevelButtons();
-      go('result');
-      maybeAutoRead();
-    }, 600);
+    const [info] = await Promise.all([lookupCommunity(value), delay(600)]);
+    ui.omni.classList.remove('is-scanning');
+    ui.checkBtn.classList.remove('is-loading');
+    const base = analyze(value);
+    state.level = bumpLevel(base, info);
+    state.resultKind = 'text';
+    state.checkedText = value;
+    renderResult(device, state.level, value, state.level !== base ? communityReasons(info) : null);
+    renderCommunity(device, info);
+    syncLevelButtons();
+    go('result');
+    maybeAutoRead();
   }
 
   function maybeAutoRead() {
@@ -935,11 +1052,15 @@
       if (token.cancelled) return;
       endScan();
 
+      const info = result.sha256 ? await lookupCommunity(result.sha256) : null;
+      if (token.cancelled) return;
+      result.level = bumpLevel(result.level, info);
       state.resultKind = 'file';
       state.fileResult = result;
       state.level = result.level;
       state.checkedText = `Tệp “${result.name}” (SHA-256: ${result.sha256 ? result.sha256.slice(0, 16) + '…' : 'không rõ'}) – ${FILE_TEXT[result.level].title.toLowerCase()}`;
       renderFileResult(device, result);
+      renderCommunity(device, info);
       syncLevelButtons();
       clearFile();
       go('result');
@@ -1174,23 +1295,46 @@
   }
 
   /* ---------- 14. BÁO CÁO: GỬI LÊN MÁY CHỦ, HÀNG ĐỢI KHI MẤT MẠNG ---------- */
-  function prepareReport() {
-    if (device.querySelector('[data-screen="report"]').classList.contains('is-done')) resetReport();
-    const current = ui.reportText.value.trim();
-    if (!current || current === state.reportPrefill) {
-      ui.reportText.value = state.checkedText;
-      state.reportPrefill = state.checkedText;
+  /* Điền sẵn báo cáo từ nội dung vừa kiểm tra */
+  function reportDraft() {
+    if (state.resultKind === 'file' && state.fileResult) {
+      return { type: 'file', target: state.fileResult.sha256 || '', content: `Tệp “${state.fileResult.name}”` };
     }
+    const t = state.checkedText;
+    const kind = detectType(t).label;
+    if (kind === 'Đường dẫn') return { type: 'link', target: t, content: '' };
+    if (kind === 'Số điện thoại') return { type: 'phone', target: t, content: '' };
+    if (kind === 'Số tài khoản') return { type: 'bank', target: t, content: '' };
+    const url = t.match(URL_IN_TEXT);
+    return url ? { type: 'link', target: url[0], content: t } : { type: null, target: '', content: t };
+  }
+
+  function prepareReport() {
+    const screen = device.querySelector('[data-screen="report"]');
+    if (screen.classList.contains('is-done') || state.reportPrefill !== state.checkedText) resetReport();
   }
 
   function resetReport() {
-    state.reportType = null;
+    const d = reportDraft();
+    state.reportType = d.type;
     setReportDone(device, false);
-    selectReportType(device, null);
-    ui.reportText.value = state.checkedText;
+    selectReportType(device, d.type);
+    ui.reportTarget.value = d.target;
+    ui.reportText.value = d.content;
     state.reportPrefill = state.checkedText;
     $(device, 'reportSubmit').classList.remove('is-loading');
     $(device, 'reportError').classList.remove('is-visible');
+    clearTargetError();
+  }
+
+  function clearTargetError() {
+    $(device, 'targetWrap').classList.remove('is-error');
+    $(device, 'targetError').classList.remove('is-visible');
+  }
+
+  function showReportError(message) {
+    $(device, 'reportErrorText').textContent = message;
+    $(device, 'reportError').classList.add('is-visible');
   }
 
   function enqueue(payload) {
@@ -1216,13 +1360,24 @@
       ui.viewport.scrollTo({ top: 0, behavior: 'smooth' });
       return;
     }
-    if (!ui.reportText.value.trim()) ui.reportText.value = state.checkedText;
+    const targetErr = validateTarget(state.reportType, ui.reportTarget.value);
+    if (targetErr) {
+      showFieldError(device, 'target', targetErr);
+      ui.reportTarget.focus();
+      return;
+    }
+    const r = state.recipients;
+    if (!r.server && !r.officials && !r.family) { showReportError('Chọn ít nhất 1 nơi nhận báo cáo.'); return; }
+    if (r.family && !state.family.length) { showReportError('Bạn chưa có người thân nào. Thêm trong Cài đặt hoặc tắt mục Người thân.'); return; }
 
+    const recipients = { server: r.server, officials: r.officials, family: r.family ? state.family.map((f) => f.name) : [] };
+    // Tên người thân không gửi lên máy chủ – chỉ gửi số lượng
     const payload = {
       clientId: uid(),
       type: state.reportType,
+      target: ui.reportTarget.value.trim(),
       content: ui.reportText.value.trim().slice(0, 2000),
-      forwardPolice: state.forward,
+      recipients: { server: r.server, officials: r.officials, family: recipients.family.length },
       riskLevel: state.level,
       clientCreatedAt: new Date().toISOString()
     };
@@ -1231,15 +1386,20 @@
 
     const finish = (mode, info) => {
       submit.classList.remove('is-loading');
-      renderReportDone(device, mode, { forward: state.forward, ...info });
+      renderReportDone(device, mode, { recipients, ...info });
       setReportDone(device, true);
       ui.viewport.scrollTo({ top: 0, behavior: 'auto' });
     };
 
+    if (!r.server && !r.officials) {
+      await delay(500);
+      finish('family');
+      return;
+    }
     if (state.offline) {
       await delay(500);
       enqueue(payload);
-      finish('queued', { pending: state.queue.length });
+      finish('queued');
       return;
     }
     if (!api.online) {
@@ -1256,14 +1416,134 @@
       if (e.status && e.status < 500) {
         submit.classList.remove('is-loading');
         setStep(device, 2);
-        $(device, 'reportErrorText').textContent = e.message;
-        $(device, 'reportError').classList.add('is-visible');
+        showReportError(e.message);
         return;
       }
       // Máy chủ không phản hồi: giữ lại để tự gửi sau.
       enqueue(payload);
-      finish('queued', { pending: state.queue.length });
+      finish('queued');
     }
+  }
+
+  async function pickReportFile(file) {
+    const hash = await sha256Hex(file).catch(() => null);
+    if (!hash) { showFieldError(device, 'target', 'Trình duyệt không tính được mã tệp. Hãy dán mã SHA-256 vào ô trên.'); return; }
+    ui.reportTarget.value = hash;
+    if (!ui.reportText.value.trim()) ui.reportText.value = `Tệp “${file.name}”`;
+    clearTargetError();
+    toast({ type: 'success', title: 'Đã lấy mã tệp', desc: `${esc(file.name)} – tệp không bị tải lên khi báo cáo.`, iconId: 'i-file-search' });
+  }
+
+  /* ---------- KIỂM DUYỆT & DANH SÁCH CẢNH BÁO ---------- */
+  const MOD_KEY = 'lcs.modToken';
+  const modToken = {
+    get() { try { return sessionStorage.getItem(MOD_KEY) || ''; } catch { return ''; } },
+    set(v) { try { if (v) sessionStorage.setItem(MOD_KEY, v); else sessionStorage.removeItem(MOD_KEY); } catch { /* bỏ qua */ } }
+  };
+  let demoPending = MOCK_PENDING.slice();
+
+  function recipLabel(r) {
+    const parts = [];
+    if (r.server) parts.push('Cộng đồng');
+    if (r.officials) parts.push('Cán bộ');
+    if (r.family) parts.push(`${r.family} người thân`);
+    return parts.join(', ') || 'Không rõ';
+  }
+
+  function renderModeration(root, items, demo) {
+    const card = $(root, 'modCard');
+    card.classList.remove('needs-login');
+    card.classList.toggle('is-empty', !items.length);
+    $(root, 'modCount').textContent = `${items.length} chờ duyệt${demo ? ' (demo)' : ''}`;
+    $(root, 'modList').innerHTML = items.map((r) => {
+      const t = REPORT_TYPES[r.type] || REPORT_TYPES.sms;
+      return `
+      <li class="mod-item">
+        <div class="mod-top">
+          <span class="hot-sev ${r.type === 'link' ? 'sev-warning' : 'sev-danger'}">${icon(t.icon)}</span>
+          <span class="mod-meta"><strong>${esc(r.target || '(không có)')}</strong><small>${t.label} – ${relTime(r.created_at)}${r.code ? ` – #${esc(r.code)}` : ''}</small></span>
+        </div>
+        ${r.content ? `<button class="mod-content" data-action="mod-expand" aria-label="Đọc toàn bộ báo cáo">${esc(r.content)}</button>` : ''}
+        <p class="mod-recip">Gửi tới: ${recipLabel(r.recipients || {})}</p>
+        <div class="mod-actions">
+          <button class="btn btn-outline" data-action="moderate" data-id="${esc(r.id)}" data-decision="reject">Từ chối</button>
+          <button class="btn btn-approve" data-action="moderate" data-id="${esc(r.id)}" data-decision="approve" data-target="${esc(r.target || '')}">${icon('i-check')}Duyệt</button>
+        </div>
+      </li>`;
+    }).join('');
+  }
+
+  function showModError(message) {
+    const err = $(device, 'modError');
+    err.textContent = message;
+    err.classList.toggle('is-visible', !!message);
+  }
+
+  async function loadModeration() {
+    const card = $(device, 'modCard');
+    showModError('');
+    if (!api.online) { renderModeration(device, demoPending, true); return; }
+    const token = modToken.get();
+    if (!token) { card.classList.add('needs-login'); $(device, 'modCount').textContent = ''; return; }
+    try {
+      const res = await fetchJSON('/api/moderation', { headers: { 'x-admin-token': token } }, 6000);
+      renderModeration(device, res.items || [], false);
+    } catch (e) {
+      if (e.status === 401 || e.status === 403) { modToken.set(''); card.classList.add('needs-login'); }
+      showModError(e.message);
+    }
+  }
+
+  async function moderate(el) {
+    const item = el.closest('.mod-item');
+    const { id, decision } = el.dataset;
+    $$(item, 'button').forEach((b) => (b.disabled = true));
+    try {
+      if (api.online) {
+        await fetchJSON(`/api/moderation/${encodeURIComponent(id)}`, { method: 'POST', json: { action: decision }, headers: { 'x-admin-token': modToken.get() } }, 6000);
+      } else {
+        demoPending = demoPending.filter((x) => x.id !== id);
+        if (decision === 'approve') MOCK_WARNINGS.push({ key: normalizeLoose(el.dataset.target), approved: 1, pending: 0, lastAt: new Date().toISOString() });
+      }
+    } catch (e) {
+      $$(item, 'button').forEach((b) => (b.disabled = false));
+      toast({ type: 'error', title: 'Chưa xử lý được báo cáo', desc: esc(e.message) });
+      if (e.status === 401) { modToken.set(''); loadModeration(); }
+      return;
+    }
+    item.classList.add('is-leaving');
+    setTimeout(() => {
+      item.remove();
+      const left = $$(device, '.mod-item').length;
+      $(device, 'modCard').classList.toggle('is-empty', !left);
+      $(device, 'modCount').textContent = `${left} chờ duyệt${api.online ? '' : ' (demo)'}`;
+    }, 300);
+    toast(decision === 'approve'
+      ? { type: 'success', title: 'Đã duyệt vào danh sách cảnh báo', desc: 'Ai kiểm tra nội dung này sẽ thấy cảnh báo từ cộng đồng.' }
+      : { type: 'info', title: 'Đã từ chối báo cáo', iconId: 'i-x' });
+    if (decision === 'approve') loadWarnings();
+  }
+
+  function renderWarnings(root, items) {
+    $(root, 'hotTitle').textContent = 'Danh sách cảnh báo cộng đồng';
+    $(root, 'hotList').innerHTML = items.slice(0, 6).map((w) => {
+      const t = REPORT_TYPES[w.type] || REPORT_TYPES.sms;
+      const fresh = Date.now() - Date.parse(w.lastAt) < 864e5;
+      return `
+      <li class="hot-item">
+        <span class="hot-sev ${w.count >= 3 ? 'sev-danger' : 'sev-warning'}">${icon(t.icon)}</span>
+        <span class="hot-body"><strong>${esc(w.target)}</strong><small>${t.label} – ${w.count} báo cáo – ${relTime(w.lastAt)}</small></span>
+        ${fresh ? '<span class="badge-new">Mới</span>' : ''}
+      </li>`;
+    }).join('');
+  }
+
+  async function loadWarnings() {
+    if (!api.online || state.offline) return;
+    try {
+      const res = await fetchJSON('/api/warnings', {}, 4000);
+      if (res.items && res.items.length) renderWarnings(device, res.items);
+    } catch { /* giữ danh sách hiện tại */ }
   }
 
   let flushing = false;
@@ -1306,6 +1586,7 @@
     }
     renderServerStatus(device);
     flushQueue({ silent: true });
+    loadWarnings();
   }
 
   /* ---------- 15. QUIZ ---------- */
@@ -1375,8 +1656,10 @@
     state.senior = !state.senior;
     syncToggles();
     toast(state.senior
-      ? { type: 'info', title: 'Đã bật chế độ Người cao tuổi', desc: 'Chữ to, nút lớn, ẩn bớt chi tiết phụ.', iconId: 'i-eye' }
+      ? { type: 'info', title: 'Đã bật chế độ Người cao tuổi', desc: 'Chữ to, nút lớn, chỉ giữ Kiểm tra – Bài học – Báo cáo.', iconId: 'i-eye' }
       : { type: 'info', title: 'Đã về chế độ hiển thị tiêu chuẩn', iconId: 'i-eye' });
+    if (state.senior && state.screen === 'volunteer') go('home');
+    if (state.senior && state.screen === 'quiz') go('learn');
     if (state.gallery) buildGallery();
   }
 
@@ -1438,8 +1721,8 @@
         $(r, 'omni').classList.add('is-file-scanning');
         setScanStep(r, 'analyze', 70);
       } },
-    { code: '02_KetQua · Nguy hiểm', name: 'Kết quả – mức Đỏ', screen: 'result',
-      setup: (r) => renderResult(r, 'danger', SAMPLES.police.text) },
+    { code: '02_KetQua · Nguy hiểm', name: 'Kết quả – mức Đỏ, kèm báo cáo cộng đồng', screen: 'result',
+      setup: (r) => { renderResult(r, 'danger', SAMPLES.police.text); renderCommunity(r, MOCK_WARNINGS[0]); } },
     { code: '02_KetQua · Nghi ngờ', name: 'Kết quả – mức Vàng', screen: 'result',
       setup: (r) => renderResult(r, 'warning', SAMPLES.gift.text) },
     { code: '02_KetQua · An toàn', name: 'Kết quả – mức Xanh', screen: 'result',
@@ -1450,21 +1733,23 @@
       setup: (r) => { renderResult(r, 'danger', SAMPLES.police.text); openStaticSheet(r, 'family'); } },
     { code: '03_HoiNguoiThan · Trống', name: 'Empty State – chưa có người thân', screen: 'result',
       setup: (r) => { renderResult(r, 'danger', SAMPLES.police.text); renderFamilySheet(r, []); openStaticSheet(r, 'family'); } },
-    { code: '04_BaoCao', name: 'Báo cáo – chọn loại & thông tin', screen: 'report',
-      setup: (r) => { selectReportType(r, 'call'); $(r, 'reportText').value = SAMPLES.police.text; } },
-    { code: '04_BaoCao · Hoàn tất', name: 'Báo cáo – đã lưu vào máy chủ', screen: 'report',
-      setup: (r) => { selectReportType(r, 'call'); renderReportDone(r, 'sent', { code: 'DN-2411-0482' }); setReportDone(r, true); } },
+    { code: '04_BaoCao', name: 'Gửi báo cáo – loại, nội dung, nơi nhận', screen: 'report',
+      setup: (r) => { selectReportType(r, 'phone'); $(r, 'reportTarget').value = '0857 219 446'; $(r, 'reportText').value = 'Gọi tự xưng cán bộ điện lực, đòi chuyển khoản ngay kẻo cắt điện.'; } },
+    { code: '04_BaoCao · Hoàn tất', name: 'Báo cáo – đã gửi tới máy chủ, cán bộ, người thân', screen: 'report',
+      setup: (r) => { renderReportDone(r, 'sent', { code: 'DN-2411-0482', recipients: { server: true, officials: true, family: ['Minh Anh', 'Hoàng Nam'] } }); setReportDone(r, true); } },
     { code: '04_BaoCao · Lưu tạm', name: 'Báo cáo – mất mạng, chờ gửi', screen: 'report',
-      setup: (r) => { selectReportType(r, 'call'); renderReportDone(r, 'queued', { pending: 1 }); setReportDone(r, true); } },
+      setup: (r) => { renderReportDone(r, 'queued', { recipients: { server: true, officials: true, family: [] } }); setReportDone(r, true); } },
     { code: '05_BaiHoc', name: 'Bài học – mặt trước thẻ', screen: 'learn',
       setup: (r) => renderLesson(r, 0, false) },
     { code: '05_BaiHoc · Mặt sau', name: 'Bài học – 3 bước xử lý', screen: 'learn',
       setup: (r) => renderLesson(r, 0, true) },
-    { code: '06_Quiz', name: 'Quiz – câu hỏi nhận diện', screen: 'quiz',
+    { code: '06_ThiThu', name: 'Thi thử (trong Bài học) – câu hỏi', screen: 'quiz',
       setup: (r) => renderQuiz(r, 0, null, 0) },
-    { code: '06_Quiz · Giải thích', name: 'Quiz – highlight bẫy & giải thích', screen: 'quiz',
+    { code: '06_ThiThu · Giải thích', name: 'Thi thử – highlight bẫy & giải thích', screen: 'quiz',
       setup: (r) => renderQuiz(r, 0, 'scam', 20) },
     { code: '07_TinhNguyen', name: 'Dashboard đội tình nguyện', screen: 'volunteer' },
+    { code: '07_TinhNguyen · Kiểm duyệt', name: 'Đọc & duyệt báo cáo vào danh sách cảnh báo', screen: 'volunteer',
+      setup: (r) => { r.querySelector('.kpi-grid').style.display = 'none'; renderModeration(r, MOCK_PENDING, true); } },
     { code: '07_TinhNguyen · Ảnh', name: 'Xuất ảnh tuyên truyền nhanh', screen: 'volunteer',
       setup: (r) => openStaticSheet(r, 'poster') },
     { code: '08_CaiDat', name: 'Cài đặt – chạy ngầm, hiển thị, người thân', screen: 'settings' },
@@ -1603,13 +1888,6 @@
       clearFile();
       startMic();
     },
-    quick: (el) => {
-      stopTyping();
-      clearFile();
-      setError(device, null);
-      setInputValue(device, SAMPLES[el.dataset.sample].text);
-      runCheck();
-    },
 
     listen: () => (ui.listen.classList.contains('is-playing') ? stopListen() : startListen()),
     'open-family': () => openSheet('family'),
@@ -1663,7 +1941,15 @@
     'flush-queue': () => flushQueue(),
 
     'report-type': (el) => { state.reportType = el.dataset.type; selectReportType(device, state.reportType); },
-    'toggle-forward': (el) => { state.forward = !state.forward; el.setAttribute('aria-checked', String(state.forward)); },
+    'toggle-recipient': (el) => {
+      const k = el.dataset.recipient;
+      state.recipients[k] = !state.recipients[k];
+      el.setAttribute('aria-checked', String(state.recipients[k]));
+      $(device, 'reportError').classList.remove('is-visible');
+    },
+    'report-pick-file': () => ui.reportFileInput.click(),
+    'mod-expand': (el) => el.classList.toggle('is-open'),
+    moderate: (el) => moderate(el),
     'report-submit': submitReport,
     'report-reset': () => { resetReport(); ui.viewport.scrollTo({ top: 0, behavior: 'auto' }); },
 
@@ -1716,6 +2002,21 @@
     const f = ui.fileInput.files && ui.fileInput.files[0];
     if (f) chooseFile(f);
     ui.fileInput.value = ''; // cho phép chọn lại cùng một tệp
+  });
+
+  ui.reportFileInput.addEventListener('change', () => {
+    const f = ui.reportFileInput.files && ui.reportFileInput.files[0];
+    if (f) pickReportFile(f);
+    ui.reportFileInput.value = '';
+  });
+  ui.reportTarget.addEventListener('input', clearTargetError);
+  $(device, 'modLogin').addEventListener('submit', (e) => {
+    e.preventDefault();
+    const v = $(device, 'modToken').value.trim();
+    if (!v) { showModError('Nhập mã kiểm duyệt.'); return; }
+    modToken.set(v);
+    $(device, 'modToken').value = '';
+    loadModeration();
   });
 
   /* Kéo thả tệp vào khung kiểm tra */
@@ -1808,8 +2109,8 @@
     renderFamilySheet(device, state.family);
     renderSettings(device, state.settings, state.family);
     renderServerStatus(device);
-    ui.reportText.value = state.checkedText;
-    state.reportPrefill = state.checkedText;
+    resetReport();
+    renderModeration(device, demoPending, true);
     template = device.cloneNode(true);
 
     syncToggles();
