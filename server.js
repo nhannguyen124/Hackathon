@@ -136,9 +136,9 @@ function openDatabase() {
       moderate(id, status) { return setStatus.run(status, new Date().toISOString(), id).changes > 0; },
       lookup(keys) {
         const marks = keys.map(() => '?').join(',');
-        const rows = db.prepare(`SELECT status, COUNT(*) AS n, MAX(created_at) AS last FROM reports
-          WHERE target IN (${marks}) AND share_public = 1 GROUP BY status`).all(...keys);
-        return summarizeLookup(rows);
+        const row = db.prepare(`SELECT COUNT(*) AS n, MAX(created_at) AS last FROM reports
+          WHERE target IN (${marks}) AND share_public = 1 AND status = 'approved'`).get(...keys);
+        return { approved: row.n, lastAt: row.last };
       },
       warnings(limit) {
         return db.prepare(`SELECT target, type, COUNT(*) AS count, MAX(created_at) AS lastAt FROM reports
@@ -190,14 +190,8 @@ function openDatabase() {
         return true;
       },
       lookup(keys) {
-        const groups = {};
-        rows.filter((x) => keys.includes(x.target) && x.share_public !== 0).forEach((x) => {
-          const st = x.status || 'pending';
-          const g = groups[st] || (groups[st] = { status: st, n: 0, last: '' });
-          g.n += 1;
-          if (x.created_at > g.last) g.last = x.created_at;
-        });
-        return summarizeLookup(Object.values(groups));
+        const hits = rows.filter((x) => keys.includes(x.target) && x.share_public !== 0 && x.status === 'approved');
+        return { approved: hits.length, lastAt: hits.map((x) => x.created_at).sort().pop() || null };
       },
       warnings(limit) {
         const map = new Map();
@@ -223,11 +217,12 @@ function openDatabase() {
 function normalizeTarget(type, raw) {
   const v = String(raw || '').trim();
   const digits = v.replace(/[\s.\-()]/g, '');
-  if (type === 'phone') return /^\+?\d{8,15}$/.test(digits) ? digits.replace(/^\+?84(?=\d{9}$)/, '0') : null;
+  if (type === 'phone') return /^\+?\d{8,15}$/.test(digits) ? digits.replace(/^\+?84(?=\d{9,10}$)/, '0') : null;
   if (type === 'bank') return /^\d{6,19}$/.test(digits) ? digits : null;
   if (type === 'file') return /^([a-f0-9]{32}|[a-f0-9]{40}|[a-f0-9]{64})$/i.test(v) ? v.toLowerCase() : null;
   if (type === 'link') {
-    const u = v.toLowerCase().replace(/^https?:\/\//, '').replace(/^www\./, '').replace(/\/+$/, '');
+    // Bỏ dấu câu dính cuối link khi chép từ câu văn ("...tại trang-gia.top.")
+    const u = v.toLowerCase().replace(/^https?:\/\//, '').replace(/^www\./, '').replace(/[.,;:!?)"'”’]+$/, '').replace(/\/+$/, '');
     return u.length <= 300 && /^[^\s/]+\.[^\s]{2,}$/.test(u) ? u : null;
   }
   return null;
@@ -236,12 +231,6 @@ function normalizeTarget(type, raw) {
 /* Một chuỗi người dùng nhập có thể là SĐT, STK, mã tệp hoặc đường dẫn – thử mọi cách hiểu */
 function lookupKeys(raw) {
   return [...new Set(['phone', 'bank', 'file', 'link'].map((t) => normalizeTarget(t, raw)).filter(Boolean))];
-}
-
-function summarizeLookup(rows) {
-  const get = (st) => rows.find((r) => r.status === st) || { n: 0 };
-  const lastAt = rows.map((r) => r.last).filter(Boolean).sort().pop() || null;
-  return { approved: get('approved').n, pending: get('pending').n, lastAt };
 }
 
 function makeCode(id) {
@@ -435,7 +424,8 @@ function validateReport(body) {
   if (!body || typeof body !== 'object') return 'Dữ liệu báo cáo không hợp lệ.';
   if (!REPORT_TYPES.includes(body.type)) return 'Hãy chọn loại báo cáo: số điện thoại, trang web, tệp độc hại hoặc số tài khoản.';
   if (body.content != null && (typeof body.content !== 'string' || body.content.length > 2000)) return 'Mô tả dài quá 2.000 ký tự. Hãy rút gọn lại.';
-  if (!LEGACY_TYPES.includes(body.type) && !normalizeTarget(body.type, body.target)) {
+  const legacy = LEGACY_TYPES.includes(body.type) || body.target == null; // bản 1.1 chưa có trường target
+  if (!legacy && !normalizeTarget(body.type, body.target)) {
     return {
       phone: 'Số điện thoại cần 8–15 chữ số.',
       bank: 'Số tài khoản chỉ gồm 6–19 chữ số.',
@@ -443,7 +433,7 @@ function validateReport(body) {
       link: 'Đường dẫn chưa đúng định dạng (VD: bit.ly/abc).'
     }[body.type];
   }
-  if (LEGACY_TYPES.includes(body.type) && !(typeof body.content === 'string' && body.content.trim())) return 'Hãy nhập nội dung cần báo cáo.';
+  if (legacy && !(typeof body.content === 'string' && body.content.trim())) return 'Hãy nhập nội dung cần báo cáo.';
   if (body.riskLevel != null && !RISK_LEVELS.includes(body.riskLevel)) return 'Mức rủi ro không hợp lệ.';
   if (body.clientId != null && !/^[A-Za-z0-9-]{8,64}$/.test(String(body.clientId))) return 'Mã báo cáo không hợp lệ.';
   const r = body.recipients;
@@ -524,7 +514,7 @@ async function handleModerate(req, res, rawId) {
 function handleLookup(req, res, url) {
   if (rateLimited(req, 'lookup', 60, 60000)) return send(res, 429, { error: 'Tra cứu quá nhanh. Hãy thử lại sau ít giây.' });
   const keys = [...new Set(url.searchParams.getAll('q').slice(0, 5).flatMap(lookupKeys))];
-  if (!keys.length) return send(res, 200, { approved: 0, pending: 0, lastAt: null });
+  if (!keys.length) return send(res, 200, { approved: 0, lastAt: null });
   return send(res, 200, db.lookup(keys));
 }
 
@@ -538,7 +528,7 @@ const server = http.createServer(async (req, res) => {
       return send(res, 200, fs.readFileSync(path.join(ROOT, file)), { 'Content-Type': type, 'Cache-Control': 'no-cache' });
     }
     if (pathname === '/api/health' && req.method === 'GET') {
-      return send(res, 200, { ok: true, virustotal: !!VT_KEY, database: db.kind, moderation: !!ADMIN_TOKEN });
+      return send(res, 200, { ok: true, virustotal: !!VT_KEY, database: db.kind });
     }
     if (pathname === '/api/stats' && req.method === 'GET') return send(res, 200, db.stats());
     if (pathname === '/api/lookup' && req.method === 'GET') return handleLookup(req, res, url);
