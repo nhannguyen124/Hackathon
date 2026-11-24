@@ -755,7 +755,7 @@
         <button class="fr-main" data-action="send-family" data-id="${f.id}">
           <span class="avatar av-${f.color}">${esc(initials(f.name))}</span>
           <span class="fr-body"><strong>${esc(f.name)}</strong><small>${esc(f.rel)} · ${maskPhone(f.phone)}</small></span>
-          <span class="fr-send" aria-label="Gửi cảnh báo">${icon('i-send')}<span>Gửi</span></span>
+          <span class="fr-send" aria-label="Gửi cảnh báo">${icon('i-send')}</span>
         </button>
         <button class="fr-call" data-action="call-family" data-id="${f.id}" aria-label="Gọi ${esc(f.name)}">${icon('i-phone')}</button>
       </li>`).join('');

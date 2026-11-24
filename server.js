@@ -528,7 +528,7 @@ const server = http.createServer(async (req, res) => {
       return send(res, 200, fs.readFileSync(path.join(ROOT, file)), { 'Content-Type': type, 'Cache-Control': 'no-cache' });
     }
     if (pathname === '/api/health' && req.method === 'GET') {
-      return send(res, 200, { ok: true, virustotal: !!VT_KEY, database: db.kind, moderation: !!ADMIN_TOKEN });
+      return send(res, 200, { ok: true, virustotal: !!VT_KEY, database: db.kind });
     }
     if (pathname === '/api/stats' && req.method === 'GET') return send(res, 200, db.stats());
     if (pathname === '/api/lookup' && req.method === 'GET') return handleLookup(req, res, url);
